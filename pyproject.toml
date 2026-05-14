@@ -1,0 +1,45 @@
+[project]
+name = "crewline"
+version = "0.1.0"
+description = "Crewline - backend service for the autonomous engineering agent platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "structlog>=24.4.0",
+    "python-ulid>=3.0.0",
+    "bcrypt>=4.2.0",
+    "boto3>=1.34.0",
+    "pyjwt[crypto]>=2.10.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "httpx>=0.27.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.21.0",
+    "types-boto3[s3]>=1.34.0",
+    "types-python-dateutil",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: integration tests requiring Postgres, MinIO, and full app wiring",
+]

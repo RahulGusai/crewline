@@ -1,0 +1,23 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "N",
+    "SIM",
+]
+ignore = [
+    "E501",
+]
+
+[lint.per-file-ignores]
+"alembic/versions/*" = ["E", "W", "F", "N"]
+
+[format]
+quote-style = "double"
