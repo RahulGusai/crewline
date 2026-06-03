@@ -21,10 +21,10 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 AGENTS_AND_SETTINGS = [
-    ("be", "agent_be_initial_key"),
-    ("fe", "agent_fe_initial_key"),
+    ("cortex", "agent_be_initial_key"),
+    ("lumen", "agent_fe_initial_key"),
     ("architect", "agent_architect_initial_key"),
-    ("qa", "agent_qa_initial_key"),
+    ("sentinel", "agent_qa_initial_key"),
 ]
 
 

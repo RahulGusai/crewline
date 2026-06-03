@@ -37,6 +37,7 @@ class RpcRequestPayload(StrictSchema):
     subject: str
     body: str
     ticket_id: int
+    repo_url: str | None = None
 
 
 class RpcResponsePayload(StrictSchema):

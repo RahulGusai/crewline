@@ -10,7 +10,7 @@ from tests.integration.constants import PM_ACTOR
 pytestmark = pytest.mark.integration
 
 
-def _notification_payload(recipient: str = "agent:be", ticket_id: int | None = None) -> dict:
+def _notification_payload(recipient: str = "agent:cortex", ticket_id: int | None = None) -> dict:
     return {
         "type": "notification",
         "recipient": recipient,
@@ -206,7 +206,7 @@ async def test_ack_someone_elses_message_returns_404(
     pm_client: httpx.AsyncClient,
     agent_fe_client: httpx.AsyncClient,
 ) -> None:
-    message = await pm_client.post("/mailbox/messages", json=_notification_payload("agent:be"))
+    message = await pm_client.post("/mailbox/messages", json=_notification_payload("agent:cortex"))
 
     response = await agent_fe_client.post(f"/mailbox/messages/{message.json()['id']}/ack")
 
@@ -236,7 +236,7 @@ async def test_send_disallowed_message_type_returns_422(
         "/mailbox/messages",
         json={
             "type": "ticket_assigned",
-            "recipient": "agent:be",
+            "recipient": "agent:cortex",
             "payload": {"ticket_id": 1, "title": "x", "assigned_by": PM_ACTOR},
         },
     )

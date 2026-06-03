@@ -8,12 +8,11 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor
-from app.auth.permissions import require_owned_ticket
+from app.auth.permissions import require_owned_or_qa_agent_ticket_access, require_ticket_read_access
 from app.db import get_session
 from app.domain.actor import Actor
 from app.domain.artifacts import add_artifact, list_artifacts
 from app.domain.tickets import get_ticket
-from app.enums import ActorKind
 from app.schemas.artifact import ArtifactCreate, ArtifactRead
 
 router = APIRouter(prefix="/tickets", tags=["artifacts"])
@@ -30,9 +29,13 @@ async def add_artifact_route(
     actor: Annotated[Actor, Depends(get_current_actor)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ArtifactRead:
-    if actor.kind == ActorKind.AGENT:
-        ticket = await get_ticket(session, ticket_id)
-        require_owned_ticket(actor, ticket, f"add artifact to ticket {ticket_id}")
+    ticket = await get_ticket(session, ticket_id)
+    await require_owned_or_qa_agent_ticket_access(
+        session,
+        actor,
+        ticket,
+        f"add artifact to ticket {ticket_id}",
+    )
 
     artifact = await add_artifact(
         session=session,
@@ -50,9 +53,8 @@ async def list_artifacts_route(
     actor: Annotated[Actor, Depends(get_current_actor)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[ArtifactRead]:
-    if actor.kind == ActorKind.AGENT:
-        ticket = await get_ticket(session, ticket_id)
-        require_owned_ticket(actor, ticket, f"list artifacts on ticket {ticket_id}")
+    ticket = await get_ticket(session, ticket_id)
+    await require_ticket_read_access(session, actor, ticket, f"list artifacts on ticket {ticket_id}")
 
     artifacts = await list_artifacts(session, ticket_id)
     return [ArtifactRead.model_validate(artifact) for artifact in artifacts]

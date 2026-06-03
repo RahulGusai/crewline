@@ -22,7 +22,7 @@ async def test_agent_reads_own_mailbox(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    send = await pm_client.post("/mailbox/messages", json=_notification("agent:be"))
+    send = await pm_client.post("/mailbox/messages", json=_notification("agent:cortex"))
 
     response = await agent_be_client.get("/mailbox")
 
@@ -36,7 +36,7 @@ async def test_agent_mailbox_does_not_include_pm_messages(
     agent_be_client: httpx.AsyncClient,
 ) -> None:
     await agent_be_client.post("/mailbox/messages", json=_notification(PM_ACTOR))
-    own = await pm_client.post("/mailbox/messages", json=_notification("agent:be"))
+    own = await pm_client.post("/mailbox/messages", json=_notification("agent:cortex"))
 
     response = await agent_be_client.get("/mailbox")
 
@@ -64,7 +64,7 @@ async def test_system_fired_message_types_are_rejected(
 ) -> None:
     response = await pm_client.post(
         "/mailbox/messages",
-        json={"type": message_type, "recipient": "agent:be", "payload": {}},
+        json={"type": message_type, "recipient": "agent:cortex", "payload": {}},
     )
 
     assert response.status_code == 422

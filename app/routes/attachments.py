@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor, require_pm_actor
+from app.auth.permissions import require_ticket_read_access
 from app.config import get_settings
 from app.db import get_session
 from app.domain.actor import Actor
@@ -103,7 +104,7 @@ async def list_attachments_route(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[AttachmentRead]:
     ticket = await get_ticket(session, ticket_id)
-    _check_ticket_access(actor, ticket.id, ticket.owner_agent_id)
+    await require_ticket_read_access(session, actor, ticket, f"list attachments on ticket {ticket_id}")
     attachments = await list_attachments(session, ticket_id)
     return [AttachmentRead.model_validate(attachment) for attachment in attachments]
 
@@ -120,7 +121,7 @@ async def request_download_url_route(
 ) -> AttachmentDownloadResponse:
     settings = get_settings()
     ticket = await get_ticket(session, ticket_id)
-    _check_ticket_access(actor, ticket.id, ticket.owner_agent_id)
+    await require_ticket_read_access(session, actor, ticket, f"download attachment on ticket {ticket_id}")
     attachment = await get_attachment(session, attachment_id)
     if attachment.ticket_id != ticket_id:
         raise AttachmentNotFoundError(attachment_id)

@@ -50,7 +50,7 @@ async def test_request_upload_url_creates_pending_row(
     pm_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await _request_upload(pm_client, ticket["id"])
     row = await db_fetch_one(
@@ -71,7 +71,7 @@ async def test_request_upload_url_disallowed_content_type_returns_415(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await _request_upload(
         pm_client,
@@ -87,7 +87,7 @@ async def test_request_upload_url_too_large_returns_413(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await _request_upload(pm_client, ticket["id"], size_bytes=25 * 1024 * 1024 + 1)
 
@@ -108,7 +108,7 @@ async def test_agent_requests_upload_url_for_own_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await _request_upload(agent_be_client, ticket["id"])
 
@@ -119,7 +119,7 @@ async def test_agent_requests_upload_url_for_other_ticket_returns_403(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await _request_upload(agent_be_client, ticket["id"])
 
@@ -131,7 +131,7 @@ async def test_put_to_upload_url_succeeds(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
 
     response = await _put_bytes(upload.json()["upload_url"], b"hello")
@@ -144,7 +144,7 @@ async def test_finalize_after_successful_upload_marks_ready(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
 
@@ -161,7 +161,7 @@ async def test_finalize_without_upload_returns_409(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
 
     response = await pm_client.post(
@@ -179,7 +179,7 @@ async def test_finalize_with_size_mismatch_sets_failed(
     storage_bucket: str,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
     attachment = await db_fetch_one(
         "SELECT s3_key FROM ticket_attachments WHERE id = :attachment_id",
@@ -209,7 +209,7 @@ async def test_finalize_same_attachment_twice_returns_409(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
     first = await pm_client.post(
@@ -229,7 +229,7 @@ async def test_list_attachments_returns_ready_only(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     pending = await _request_upload(pm_client, ticket["id"], filename="pending.txt")
     ready = await _request_upload(pm_client, ticket["id"], filename="ready.txt")
     await _put_bytes(ready.json()["upload_url"], b"hello")
@@ -244,11 +244,30 @@ async def test_list_attachments_returns_ready_only(
     assert [item["id"] for item in response.json()] == [ready.json()["attachment_id"]]
 
 
+async def test_qa_agent_lists_attachments_for_other_agent_ticket(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    ready = await _request_upload(pm_client, ticket["id"], filename="review.txt")
+    await _put_bytes(ready.json()["upload_url"], b"hello")
+    finalized = await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{ready.json()['attachment_id']}/finalize",
+    )
+
+    response = await agent_qa_client.get(f"/tickets/{ticket['id']}/attachments")
+
+    assert finalized.status_code == 200, finalized.text
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()] == [ready.json()["attachment_id"]]
+
+
 async def test_list_excludes_pending_and_deleted(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     pending = await _request_upload(pm_client, ticket["id"], filename="pending.txt")
     ready = await _request_upload(pm_client, ticket["id"], filename="ready.txt")
     await _put_bytes(ready.json()["upload_url"], b"hello")
@@ -270,7 +289,7 @@ async def test_get_download_url_for_ready_attachment(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], filename="download.txt", size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
     await pm_client.post(
@@ -286,11 +305,32 @@ async def test_get_download_url_for_ready_attachment(
     assert response.json()["filename"] == "download.txt"
 
 
+async def test_qa_agent_gets_download_url_for_other_agent_ticket(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], filename="qa-download.txt", size_bytes=5)
+    await _put_bytes(upload.json()["upload_url"], b"hello")
+    await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/finalize",
+    )
+
+    response = await agent_qa_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/download-url",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["download_url"]
+    assert response.json()["filename"] == "qa-download.txt"
+
+
 async def test_download_url_fetches_uploaded_bytes(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], filename="download.txt", size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
     await pm_client.post(
@@ -311,7 +351,7 @@ async def test_download_url_for_pending_attachment_returns_409(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
 
     response = await pm_client.get(
@@ -327,7 +367,7 @@ async def test_soft_delete_by_pm_sets_deleted_at(
     pm_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
     await pm_client.post(
@@ -352,7 +392,7 @@ async def test_soft_delete_by_agent_returns_403(
     agent_be_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
 
     response = await agent_be_client.delete(
@@ -366,7 +406,7 @@ async def test_list_after_delete_excludes_deleted(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
     await _put_bytes(upload.json()["upload_url"], b"hello")
     await pm_client.post(
@@ -386,8 +426,8 @@ async def test_cross_ticket_attachment_id_returns_404(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    first = await create_ticket(title="first", owner_agent_id="be")
-    second = await create_ticket(title="second", owner_agent_id="be")
+    first = await create_ticket(title="first", owner_agent_id="cortex")
+    second = await create_ticket(title="second", owner_agent_id="cortex")
     upload = await _request_upload(pm_client, first["id"], size_bytes=5)
 
     response = await pm_client.get(

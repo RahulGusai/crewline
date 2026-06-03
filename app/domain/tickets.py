@@ -58,7 +58,6 @@ async def create_ticket(
     owner_agent_id: str | None = None,
     repo_full_name: str,
     related_repo_full_names: list[str] | None = None,
-    qa_notes: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Ticket:
     """Create a new ticket in TODO status, optionally assigned to an agent."""
@@ -81,7 +80,6 @@ async def create_ticket(
         created_by=created_by,
         repo_full_name=repo_full_name,
         related_repo_full_names=related_repo_full_names or [],
-        qa_notes=qa_notes,
         metadata_=metadata or {},
     )
     session.add(ticket)
@@ -126,7 +124,6 @@ async def update_ticket(
     title: str | None = None,
     description: str | None = None,
     related_repo_full_names: list[str] | None = None,
-    qa_notes: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Ticket:
     """Edit ticket fields. PM-only in v0."""
@@ -146,9 +143,6 @@ async def update_ticket(
     if related_repo_full_names is not None and related_repo_full_names != ticket.related_repo_full_names:
         ticket.related_repo_full_names = related_repo_full_names
         changed_fields.append("related_repo_full_names")
-    if qa_notes is not None and qa_notes != ticket.qa_notes:
-        ticket.qa_notes = qa_notes
-        changed_fields.append("qa_notes")
     if metadata is not None and metadata != ticket.metadata_:
         ticket.metadata_ = metadata
         changed_fields.append("metadata")
@@ -219,7 +213,7 @@ async def transition_ticket(
         await send_ticket_review_requested(
             session,
             ticket_id=ticket.id,
-            recipient="agent:qa",
+            recipient="agent:sentinel",
             sender=AUTO_QA_ACTOR,
         )
 
@@ -236,7 +230,7 @@ async def transition_ticket(
         await send_ticket_review_requested(
             session,
             ticket_id=ticket.id,
-            recipient="agent:qa",
+            recipient="agent:sentinel",
             sender=actor,
         )
 

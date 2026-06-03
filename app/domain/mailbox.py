@@ -114,8 +114,14 @@ async def send_rpc_request(
     subject: str,
     body: str,
     ticket_id: int,
+    repo_url: str | None = None,
 ) -> MailboxMessage:
-    payload = RpcRequestPayload(subject=subject, body=body, ticket_id=ticket_id)
+    payload = RpcRequestPayload(
+        subject=subject,
+        body=body,
+        ticket_id=ticket_id,
+        repo_url=repo_url,
+    )
     return await _insert_message(
         session,
         type=MessageType.RPC_REQUEST,

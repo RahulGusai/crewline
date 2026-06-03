@@ -39,6 +39,11 @@ TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule]
         False,
         False,
     ),
+    (TicketStatus.TODO, TicketStatus.BLOCKED): TransitionRule(
+        AllowedActorCategory.OWNER,
+        True,
+        False,
+    ),
     (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED): TransitionRule(
         AllowedActorCategory.OWNER,
         True,

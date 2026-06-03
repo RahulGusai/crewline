@@ -119,7 +119,7 @@ async def test_agent_mints_repo_scoped_github_token(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
         return_value=httpx.Response(
             201,
@@ -136,11 +136,51 @@ async def test_agent_mints_repo_scoped_github_token(
 
 
 @respx.mock
+async def test_agent_mints_repo_scoped_github_token_for_other_agents_ticket(
+    create_ticket,
+    agent_fe_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
+        return_value=httpx.Response(
+            201,
+            json={"token": "ghs_question_ticket", "expires_at": "2026-05-14T11:00:00Z"},
+        )
+    )
+
+    response = await agent_fe_client.post(f"/tickets/{ticket['id']}/github-token")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["token"] == "ghs_question_ticket"
+    assert response.json()["repo_full_name"] == DEFAULT_REPO
+
+
+@respx.mock
+async def test_qa_agent_mints_repo_scoped_github_token_for_review(
+    create_ticket,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
+        return_value=httpx.Response(
+            201,
+            json={"token": "ghs_qa_ticket", "expires_at": "2026-05-14T11:00:00Z"},
+        )
+    )
+
+    response = await agent_qa_client.post(f"/tickets/{ticket['id']}/github-token")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["token"] == "ghs_qa_ticket"
+    assert response.json()["repo_full_name"] == DEFAULT_REPO
+
+
+@respx.mock
 async def test_agent_mints_related_repo_token(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be", related_repo_full_names=[RELATED_REPO])
+    ticket = await create_ticket(owner_agent_id="cortex", related_repo_full_names=[RELATED_REPO])
     respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
         return_value=httpx.Response(
             201,
@@ -161,7 +201,7 @@ async def test_agent_cannot_mint_token_for_unrelated_repo(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/github-token",
@@ -197,7 +237,7 @@ async def test_ticket_creation_rejects_invalid_repo(pm_client: httpx.AsyncClient
     assert response.json()["error"]["code"] == "repo_not_accessible"
 
 
-async def test_ticket_creation_and_update_related_repos_and_qa_notes(
+async def test_ticket_creation_and_update_related_repos(
     pm_client: httpx.AsyncClient,
 ) -> None:
     created = await pm_client.post(
@@ -206,20 +246,17 @@ async def test_ticket_creation_and_update_related_repos_and_qa_notes(
             "title": "with related",
             "repo_full_name": DEFAULT_REPO,
             "related_repo_full_names": [RELATED_REPO],
-            "qa_notes": "Check acceptance criteria.",
         },
     )
     updated = await pm_client.patch(
         f"/tickets/{created.json()['id']}",
-        json={"related_repo_full_names": [OTHER_REPO], "qa_notes": "Updated QA notes."},
+        json={"related_repo_full_names": [OTHER_REPO]},
     )
 
     assert created.status_code == 201, created.text
-    assert created.json()["qa_notes"] == "Check acceptance criteria."
     assert created.json()["related_repo_full_names"] == [RELATED_REPO]
     assert updated.status_code == 200, updated.text
     assert updated.json()["related_repo_full_names"] == [OTHER_REPO]
-    assert updated.json()["qa_notes"] == "Updated QA notes."
 
 
 async def test_ticket_creation_rejects_invalid_related_repo(pm_client: httpx.AsyncClient) -> None:
@@ -241,7 +278,7 @@ async def test_set_pr_url_validates_owner_format_repo_and_single_write(
     agent_be_client: httpx.AsyncClient,
     agent_fe_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     non_owner = await agent_fe_client.post(
         f"/tickets/{ticket['id']}/pr-url",
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/1"},
@@ -281,7 +318,7 @@ async def test_merge_pr_happy_path(
     agent_be_client: httpx.AsyncClient,
     agent_qa_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     await agent_be_client.post(
         f"/tickets/{ticket['id']}/pr-url",
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},
@@ -312,11 +349,44 @@ async def test_merge_pr_happy_path(
     }
 
 
+@respx.mock
+async def test_qa_agent_can_merge_pr_after_done(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    await agent_be_client.post(
+        f"/tickets/{ticket['id']}/pr-url",
+        json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},
+    )
+    await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+    await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    done = await move_ticket(agent_qa_client, ticket["id"], "DONE")
+    respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
+        return_value=httpx.Response(
+            201,
+            json={"token": "ghs_merge", "expires_at": "2026-05-14T11:00:00Z"},
+        )
+    )
+    respx.put(f"{GITHUB_API}/repos/{DEFAULT_REPO}/pulls/42/merge").mock(
+        return_value=httpx.Response(200, json={"sha": "def456", "message": "Merged by QA"})
+    )
+
+    response = await agent_qa_client.post(f"/tickets/{ticket['id']}/merge-pr")
+
+    assert done.status_code == 200, done.text
+    assert response.status_code == 200, response.text
+    assert response.json()["merged"] is True
+    assert response.json()["sha"] == "def456"
+
+
 async def test_merge_pr_requires_pr_url_and_done(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     no_pr = await agent_be_client.post(f"/tickets/{ticket['id']}/merge-pr")
     await agent_be_client.post(
@@ -344,7 +414,7 @@ async def test_merge_pr_maps_github_failures(
     status_code: int,
     expected_code: str,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     await agent_be_client.post(
         f"/tickets/{ticket['id']}/pr-url",
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},

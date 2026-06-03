@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.domain.exceptions import InvalidActorError
-from app.enums import ActorKind, AgentRole
+from app.enums import ActorKind, AgentId
 
 PM_USER_ID = "00000000-0000-0000-0000-000000000001"
 PM_HUMAN_IDS = {"pm", PM_USER_ID}
@@ -18,12 +18,12 @@ class Actor:
     raw: str
 
     @property
-    def role(self) -> AgentRole | None:
-        """If this is an agent actor, return the AgentRole; otherwise None."""
+    def agent_id(self) -> AgentId | None:
+        """If this is an agent actor, return the AgentId; otherwise None."""
         if self.kind != ActorKind.AGENT:
             return None
         try:
-            return AgentRole(self.id)
+            return AgentId(self.id)
         except ValueError:
             return None
 
@@ -44,11 +44,11 @@ def parse_actor(actor_str: str) -> Actor:
 
     if kind == ActorKind.AGENT:
         try:
-            AgentRole(id_str)
+            AgentId(id_str)
         except ValueError as exc:
             raise InvalidActorError(
                 actor=actor_str,
-                reason=f"unknown agent role: {id_str}",
+                reason=f"unknown agent id: {id_str}",
             ) from exc
 
     if kind == ActorKind.HUMAN and id_str not in PM_HUMAN_IDS:

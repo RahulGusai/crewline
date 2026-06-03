@@ -25,6 +25,11 @@ def test_transition_rules_match_followup_contract() -> None:
             reason_required=False,
             pm_override_required=False,
         ),
+        (TicketStatus.TODO, TicketStatus.BLOCKED): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=True,
+            pm_override_required=False,
+        ),
         (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED): TransitionRule(
             AllowedActorCategory.OWNER,
             reason_required=True,

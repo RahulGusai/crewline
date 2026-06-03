@@ -213,13 +213,13 @@ async def pm_client_no_csrf(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 @pytest_asyncio.fixture
 async def agent_be_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with _agent_client(app, "be") as client:
+    async with _agent_client(app, "cortex") as client:
         yield client
 
 
 @pytest_asyncio.fixture
 async def agent_fe_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with _agent_client(app, "fe") as client:
+    async with _agent_client(app, "lumen") as client:
         yield client
 
 
@@ -231,7 +231,7 @@ async def agent_architect_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClien
 
 @pytest_asyncio.fixture
 async def agent_qa_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with _agent_client(app, "qa") as client:
+    async with _agent_client(app, "sentinel") as client:
         yield client
 
 
@@ -317,18 +317,15 @@ def _empty_bucket(storage_client: Any, bucket: str) -> None:
 async def create_ticket(pm_client: httpx.AsyncClient) -> Callable[..., Any]:
     async def _create_ticket(
         title: str = "ticket",
-        owner_agent_id: str | None = "be",
+        owner_agent_id: str | None = "cortex",
         repo_full_name: str = DEFAULT_REPO,
         related_repo_full_names: list[str] | None = None,
-        qa_notes: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"title": title, "repo_full_name": repo_full_name}
         if owner_agent_id is not None:
             payload["owner_agent_id"] = owner_agent_id
         if related_repo_full_names is not None:
             payload["related_repo_full_names"] = related_repo_full_names
-        if qa_notes is not None:
-            payload["qa_notes"] = qa_notes
         response = await pm_client.post("/tickets", json=payload)
         assert response.status_code == 201, response.text
         return response.json()

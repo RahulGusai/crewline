@@ -16,13 +16,13 @@ async def test_pm_creates_ticket_with_owner(
 ) -> None:
     response = await pm_client.post(
         "/tickets",
-        json={"title": "owned ticket", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "owned ticket", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
 
     assert response.status_code == 201, response.text
     ticket = response.json()
     assert ticket["status"] == "TODO"
-    assert ticket["owner_agent_id"] == "be"
+    assert ticket["owner_agent_id"] == "cortex"
 
     row = await db_fetch_one(
         "SELECT status, owner_agent_id, repo_full_name FROM tickets WHERE id = :ticket_id",
@@ -39,11 +39,11 @@ async def test_pm_creates_ticket_with_owner(
 
     assert row == {
         "status": "TODO",
-        "owner_agent_id": "be",
+        "owner_agent_id": "cortex",
         "repo_full_name": DEFAULT_REPO,
     }
-    assert audit == {"to_status": "TODO", "to_owner": "be"}
-    assert mailbox == {"type": "ticket_assigned", "recipient": "agent:be"}
+    assert audit == {"to_status": "TODO", "to_owner": "cortex"}
+    assert mailbox == {"type": "ticket_assigned", "recipient": "agent:cortex"}
 
 
 async def test_pm_creates_ticket_without_owner(
@@ -96,7 +96,7 @@ async def test_list_tickets_pagination(
     pm_client: httpx.AsyncClient,
 ) -> None:
     for index in range(5):
-        await create_ticket(title=f"page {index}", owner_agent_id="be")
+        await create_ticket(title=f"page {index}", owner_agent_id="cortex")
 
     response = await pm_client.get("/tickets", params={"limit": 2, "offset": 0})
 
@@ -114,8 +114,8 @@ async def test_list_tickets_status_filter(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    todo = await create_ticket(title="todo", owner_agent_id="be")
-    in_progress = await create_ticket(title="in progress", owner_agent_id="be")
+    todo = await create_ticket(title="todo", owner_agent_id="cortex")
+    in_progress = await create_ticket(title="in progress", owner_agent_id="cortex")
     moved = await move_ticket(agent_be_client, in_progress["id"], "IN_PROGRESS")
 
     response = await pm_client.get("/tickets", params={"status": "IN_PROGRESS"})
@@ -131,10 +131,10 @@ async def test_list_tickets_owner_filter(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    be_ticket = await create_ticket(title="be ticket", owner_agent_id="be")
-    fe_ticket = await create_ticket(title="fe ticket", owner_agent_id="fe")
+    be_ticket = await create_ticket(title="cortex ticket", owner_agent_id="cortex")
+    fe_ticket = await create_ticket(title="lumen ticket", owner_agent_id="lumen")
 
-    response = await pm_client.get("/tickets", params={"owner_agent_id": "fe"})
+    response = await pm_client.get("/tickets", params={"owner_agent_id": "lumen"})
 
     assert response.status_code == 200, response.text
     ids = {item["id"] for item in response.json()["items"]}
@@ -146,8 +146,8 @@ async def test_agent_sees_only_own_tickets_in_list(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    own = await create_ticket(title="own", owner_agent_id="be")
-    other = await create_ticket(title="other", owner_agent_id="fe")
+    own = await create_ticket(title="own", owner_agent_id="cortex")
+    other = await create_ticket(title="other", owner_agent_id="lumen")
 
     response = await agent_be_client.get("/tickets")
 
@@ -162,7 +162,7 @@ async def test_pm_updates_ticket_title_without_audit_row(
     pm_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(title="before", owner_agent_id="be")
+    ticket = await create_ticket(title="before", owner_agent_id="cortex")
     before = await db_fetch_one(
         "SELECT count(*) AS count FROM ticket_audit_log WHERE ticket_id = :ticket_id",
         {"ticket_id": ticket["id"]},
@@ -183,7 +183,7 @@ async def test_pm_updates_with_extra_fields_returns_422(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="strict", owner_agent_id="be")
+    ticket = await create_ticket(title="strict", owner_agent_id="cortex")
 
     response = await pm_client.patch(
         f"/tickets/{ticket['id']}",
@@ -198,7 +198,7 @@ async def test_agent_cannot_update_ticket_fields(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="immutable by agent", owner_agent_id="be")
+    ticket = await create_ticket(title="immutable by agent", owner_agent_id="cortex")
 
     response = await agent_be_client.patch(
         f"/tickets/{ticket['id']}",
@@ -220,7 +220,7 @@ async def test_agent_gets_own_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="own read", owner_agent_id="be")
+    ticket = await create_ticket(title="own read", owner_agent_id="cortex")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}")
 
@@ -228,13 +228,13 @@ async def test_agent_gets_own_ticket(
     assert response.json()["id"] == ticket["id"]
 
 
-async def test_agent_gets_other_agents_ticket_returns_403(
+async def test_agent_gets_other_agents_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="other read", owner_agent_id="fe")
+    ticket = await create_ticket(title="other read", owner_agent_id="lumen")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}")
 
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "actor_not_permitted"
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == ticket["id"]

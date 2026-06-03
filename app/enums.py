@@ -21,6 +21,13 @@ class AgentRole(StrEnum):
     QA = "qa"
 
 
+class AgentId(StrEnum):
+    CORTEX = "cortex"
+    LUMEN = "lumen"
+    ARCHITECT = "architect"
+    SENTINEL = "sentinel"
+
+
 class ActorKind(StrEnum):
     AGENT = "agent"
     HUMAN = "human"

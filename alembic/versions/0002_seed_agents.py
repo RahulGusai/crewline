@@ -19,10 +19,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 AGENTS = [
-    {"id": "be", "display_name": "Cortex", "role": "be"},
-    {"id": "fe", "display_name": "Lumen", "role": "fe"},
+    {"id": "cortex", "display_name": "Cortex", "role": "be"},
+    {"id": "lumen", "display_name": "Lumen", "role": "fe"},
     {"id": "architect", "display_name": "Atlas", "role": "architect"},
-    {"id": "qa", "display_name": "Sentinel", "role": "qa"},
+    {"id": "sentinel", "display_name": "Sentinel", "role": "qa"},
 ]
 
 

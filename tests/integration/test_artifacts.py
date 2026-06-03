@@ -15,7 +15,7 @@ async def test_agent_adds_artifact_to_own_ticket(
     agent_be_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/artifacts",
@@ -27,15 +27,15 @@ async def test_agent_adds_artifact_to_own_ticket(
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["author"] == "agent:be"
-    assert row["author"] == "agent:be"
+    assert response.json()["author"] == "agent:cortex"
+    assert row["author"] == "agent:cortex"
 
 
 async def test_agent_adds_artifact_to_other_ticket_returns_403(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/artifacts",
@@ -46,11 +46,26 @@ async def test_agent_adds_artifact_to_other_ticket_returns_403(
     assert response.json()["error"]["code"] == "actor_not_permitted"
 
 
+async def test_qa_agent_adds_artifact_to_other_agent_ticket(
+    create_ticket,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await agent_qa_client.post(
+        f"/tickets/{ticket['id']}/artifacts",
+        json={"artifact_type": "qa_review", "content": "review note"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["author"] == "agent:sentinel"
+
+
 async def test_pm_adds_artifact(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/artifacts",
@@ -65,7 +80,7 @@ async def test_list_artifacts_on_ticket_returns_in_order(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     first = await pm_client.post(
         f"/tickets/{ticket['id']}/artifacts",
         json={"artifact_type": "note", "content": "order 1"},
@@ -81,6 +96,24 @@ async def test_list_artifacts_on_ticket_returns_in_order(
     assert second.status_code == 201, second.text
     assert response.status_code == 200, response.text
     assert [item["id"] for item in response.json()] == [first.json()["id"], second.json()["id"]]
+
+
+async def test_qa_agent_lists_artifacts_for_other_agent_ticket(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    artifact = await pm_client.post(
+        f"/tickets/{ticket['id']}/artifacts",
+        json={"artifact_type": "implementation", "content": "ready for review"},
+    )
+
+    response = await agent_qa_client.get(f"/tickets/{ticket['id']}/artifacts")
+
+    assert artifact.status_code == 201, artifact.text
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()] == [artifact.json()["id"]]
 
 
 async def test_adding_artifact_to_nonexistent_ticket_returns_404(
@@ -99,14 +132,14 @@ async def test_artifact_create_rejects_extra_fields(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/artifacts",
         json={
             "artifact_type": "note",
             "content": "extra",
-            "author": "agent:be",
+            "author": "agent:cortex",
         },
     )
 

@@ -138,7 +138,7 @@ async def test_valid_agent_api_key_authenticates(
     response = await agent_be_client.get("/agents")
     credential = await db_fetch_one(
         "SELECT last_used_at FROM agent_credentials WHERE agent_id = :agent_id",
-        {"agent_id": "be"},
+        {"agent_id": "cortex"},
     )
 
     assert response.status_code == 200, response.text
@@ -163,12 +163,12 @@ async def test_revoked_agent_api_key_returns_401(
 ) -> None:
     await db_execute(
         "UPDATE agent_credentials SET revoked_at = now() WHERE agent_id = :agent_id",
-        {"agent_id": "be"},
+        {"agent_id": "cortex"},
     )
 
     response = await anonymous_client.get(
         "/agents",
-        headers={"Authorization": f"Bearer {AGENT_KEYS['be']}"},
+        headers={"Authorization": f"Bearer {AGENT_KEYS['cortex']}"},
     )
 
     assert response.status_code == 401
@@ -178,7 +178,7 @@ async def test_agent_mutation_does_not_require_csrf(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="agent csrf", owner_agent_id="be")
+    ticket = await create_ticket(title="agent csrf", owner_agent_id="cortex")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/transitions",

@@ -9,7 +9,7 @@ pytestmark = pytest.mark.integration
 
 
 async def _ready_for_qa(create_ticket, agent_client: httpx.AsyncClient, move_ticket) -> dict:
-    ticket = await create_ticket(title="ready for qa", owner_agent_id="be")
+    ticket = await create_ticket(title="ready for sentinel", owner_agent_id="cortex")
     started = await move_ticket(agent_client, ticket["id"], "IN_PROGRESS")
     ready = await move_ticket(agent_client, ticket["id"], "READY_FOR_QA")
     assert started.status_code == 200, started.text
@@ -23,7 +23,7 @@ async def _force_ready_for_qa(
     move_ticket,
     db_execute,
 ) -> dict:
-    ticket = await create_ticket(title="forced ready for qa", owner_agent_id="be")
+    ticket = await create_ticket(title="forced ready for sentinel", owner_agent_id="cortex")
     started = await move_ticket(agent_client, ticket["id"], "IN_PROGRESS")
     assert started.status_code == 200, started.text
     await db_execute(
@@ -48,7 +48,7 @@ async def test_todo_to_in_progress_by_owner_agent(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
@@ -61,7 +61,7 @@ async def test_todo_to_in_progress_by_non_owner_agent(
     move_ticket,
     agent_fe_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(agent_fe_client, ticket["id"], "IN_PROGRESS")
 
@@ -73,7 +73,7 @@ async def test_todo_to_in_progress_by_pm_not_allowed(
     move_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(pm_client, ticket["id"], "IN_PROGRESS")
 
@@ -85,11 +85,49 @@ async def test_todo_to_in_progress_without_reason_allowed(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
     assert response.status_code == 200, response.text
+
+
+async def test_todo_to_blocked_by_owner_with_reason_allowed(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await move_ticket(agent_be_client, ticket["id"], "BLOCKED", "dependency install failed")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "BLOCKED"
+
+
+async def test_todo_to_blocked_without_reason_requires_reason(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await move_ticket(agent_be_client, ticket["id"], "BLOCKED")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "reason_required"
+
+
+async def test_todo_to_blocked_by_non_owner_agent_returns_403(
+    create_ticket,
+    move_ticket,
+    agent_fe_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await move_ticket(agent_fe_client, ticket["id"], "BLOCKED", "dependency install failed")
+
+    assert response.status_code == 403
 
 
 async def test_in_progress_to_blocked_without_reason_requires_reason(
@@ -97,7 +135,7 @@ async def test_in_progress_to_blocked_without_reason_requires_reason(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
     response = await move_ticket(agent_be_client, ticket["id"], "BLOCKED")
@@ -113,7 +151,7 @@ async def test_in_progress_to_blocked_with_reason_writes_audit(
     agent_be_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
     response = await move_ticket(agent_be_client, ticket["id"], "BLOCKED", "waiting on API")
@@ -136,7 +174,7 @@ async def test_blocked_to_in_progress_by_owner(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
     blocked = await move_ticket(agent_be_client, ticket["id"], "BLOCKED", "waiting")
 
@@ -152,7 +190,7 @@ async def test_in_progress_to_ready_for_qa_by_owner(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
     response = await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
@@ -168,7 +206,7 @@ async def test_ready_for_qa_auto_transitions_to_in_qa_and_fires_review_message(
     agent_be_client: httpx.AsyncClient,
     db_fetch_all,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
     response = await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
     messages = await db_fetch_all(
@@ -183,7 +221,7 @@ async def test_ready_for_qa_auto_transitions_to_in_qa_and_fires_review_message(
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "IN_QA"
     assert messages == [
-        {"type": "ticket_review_requested", "recipient": "agent:qa", "sender": "system:system"}
+        {"type": "ticket_review_requested", "recipient": "agent:sentinel", "sender": "system:system"}
     ]
     assert {"from_status": "READY_FOR_QA", "to_status": "IN_QA", "actor": "system:system"} in audit
 
@@ -326,7 +364,7 @@ async def test_any_state_to_cancelled_by_pm_with_override_and_reason(
     move_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(pm_client, ticket["id"], "CANCELLED", "not needed", True)
 
@@ -339,7 +377,7 @@ async def test_any_state_to_cancelled_by_pm_without_override_returns_403(
     move_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(pm_client, ticket["id"], "CANCELLED", "not needed")
 
@@ -352,7 +390,7 @@ async def test_any_state_to_cancelled_by_agent_returns_403(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(agent_be_client, ticket["id"], "CANCELLED", "not needed")
 
@@ -381,7 +419,7 @@ async def test_cancelled_is_terminal(
     move_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     cancelled = await move_ticket(pm_client, ticket["id"], "CANCELLED", "cancel", True)
 
     response = await move_ticket(pm_client, ticket["id"], "TODO", "reopen", True)
@@ -396,11 +434,11 @@ async def test_reassignment_by_pm_fires_messages_and_audit(
     pm_client: httpx.AsyncClient,
     db_fetch_all,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/assign",
-        json={"new_owner_agent_id": "fe", "reason": "frontend owns this now"},
+        json={"new_owner_agent_id": "lumen", "reason": "frontend owns this now"},
     )
     audit = await db_fetch_all(
         """
@@ -415,10 +453,10 @@ async def test_reassignment_by_pm_fires_messages_and_audit(
     )
 
     assert response.status_code == 200, response.text
-    assert response.json()["owner_agent_id"] == "fe"
-    assert {"from_owner": "be", "to_owner": "fe"} in audit
-    assert {"type": "ticket_unassigned", "recipient": "agent:be"} in messages
-    assert {"type": "ticket_assigned", "recipient": "agent:fe"} in messages
+    assert response.json()["owner_agent_id"] == "lumen"
+    assert {"from_owner": "cortex", "to_owner": "lumen"} in audit
+    assert {"type": "ticket_unassigned", "recipient": "agent:cortex"} in messages
+    assert {"type": "ticket_assigned", "recipient": "agent:lumen"} in messages
 
 
 async def test_reassignment_to_same_owner_is_noop(
@@ -426,17 +464,17 @@ async def test_reassignment_to_same_owner_is_noop(
     pm_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     before = await db_fetch_one("SELECT count(*) AS count FROM mailbox_messages")
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/assign",
-        json={"new_owner_agent_id": "be"},
+        json={"new_owner_agent_id": "cortex"},
     )
     after = await db_fetch_one("SELECT count(*) AS count FROM mailbox_messages")
 
     assert response.status_code == 200, response.text
-    assert response.json()["owner_agent_id"] == "be"
+    assert response.json()["owner_agent_id"] == "cortex"
     assert after["count"] == before["count"]
 
 
@@ -449,9 +487,9 @@ async def test_assignment_of_unassigned_ticket_fires_only_assigned(
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/assign",
-        json={"new_owner_agent_id": "be"},
+        json={"new_owner_agent_id": "cortex"},
     )
     messages = await db_fetch_all("SELECT type, recipient FROM mailbox_messages")
 
     assert response.status_code == 200, response.text
-    assert messages == [{"type": "ticket_assigned", "recipient": "agent:be"}]
+    assert messages == [{"type": "ticket_assigned", "recipient": "agent:cortex"}]

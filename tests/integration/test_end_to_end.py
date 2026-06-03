@@ -40,7 +40,7 @@ async def test_flow_a_happy_path_ticket_lifecycle(
 ) -> None:
     created = await pm_client.post(
         "/tickets",
-        json={"title": "happy path", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "happy path", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
     ticket_id = created.json()["id"]
     be_mailbox = await agent_be_client.get("/mailbox")
@@ -80,7 +80,7 @@ async def test_flow_b_blocked_rpc_flow(
 ) -> None:
     created = await pm_client.post(
         "/tickets",
-        json={"title": "blocked flow", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "blocked flow", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
     ticket_id = created.json()["id"]
     started = await _transition(agent_be_client, ticket_id, "IN_PROGRESS")
@@ -102,7 +102,7 @@ async def test_flow_b_blocked_rpc_flow(
         "/mailbox/messages",
         json={
             "type": "rpc_response",
-            "recipient": "agent:be",
+            "recipient": "agent:cortex",
             "correlation_id": request.json()["id"],
             "payload": {"body": "Use option A", "outcome": "answered"},
         },
@@ -133,7 +133,7 @@ async def test_flow_c_qa_failure_and_rework(
 ) -> None:
     created = await pm_client.post(
         "/tickets",
-        json={"title": "qa failure", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "sentinel failure", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
     ticket_id = created.json()["id"]
     await _transition(agent_be_client, ticket_id, "IN_PROGRESS")
@@ -151,7 +151,7 @@ async def test_flow_c_qa_failure_and_rework(
     assert ready.status_code == 200, ready.text
     assert ready.json()["status"] == "IN_QA"
     assert done.status_code == 200, done.text
-    assert done.json()["owner_agent_id"] == "be"
+    assert done.json()["owner_agent_id"] == "cortex"
 
 
 async def test_flow_d_cancellation_is_terminal(
@@ -160,7 +160,7 @@ async def test_flow_d_cancellation_is_terminal(
 ) -> None:
     created = await pm_client.post(
         "/tickets",
-        json={"title": "cancelled", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "cancelled", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
     ticket_id = created.json()["id"]
     started = await _transition(agent_be_client, ticket_id, "IN_PROGRESS")
@@ -186,7 +186,7 @@ async def test_flow_e_reassignment_to_fe_then_completion(
 ) -> None:
     created = await pm_client.post(
         "/tickets",
-        json={"title": "reassignment", "owner_agent_id": "be", "repo_full_name": DEFAULT_REPO},
+        json={"title": "reassignment", "owner_agent_id": "cortex", "repo_full_name": DEFAULT_REPO},
     )
     ticket_id = created.json()["id"]
     be_initial = await agent_be_client.get("/mailbox")
@@ -195,7 +195,7 @@ async def test_flow_e_reassignment_to_fe_then_completion(
 
     reassigned = await pm_client.post(
         f"/tickets/{ticket_id}/assign",
-        json={"new_owner_agent_id": "fe"},
+        json={"new_owner_agent_id": "lumen"},
     )
     be_mailbox = await agent_be_client.get("/mailbox")
     fe_mailbox = await agent_fe_client.get("/mailbox")
@@ -221,4 +221,4 @@ async def test_flow_e_reassignment_to_fe_then_completion(
     assert ready.status_code == 200, ready.text
     assert ready.json()["status"] == "IN_QA"
     assert done.status_code == 200, done.text
-    assert {"from_owner": "be", "to_owner": "fe"} in owner_audit
+    assert {"from_owner": "cortex", "to_owner": "lumen"} in owner_audit

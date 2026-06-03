@@ -46,7 +46,7 @@ async def main() -> None:
             title="[seed] Implement /healthz endpoint",
             description="Add a basic liveness check endpoint.",
             created_by="human:pm",
-            owner_agent_id="be",
+            owner_agent_id="cortex",
             repo_full_name=SEED_REPO,
             metadata={SEED_MARKER_KEY: SEED_MARKER_VALUE},
         )
@@ -56,7 +56,7 @@ async def main() -> None:
             title="[seed] Build login form",
             description="Email + password fields, basic validation.",
             created_by="human:pm",
-            owner_agent_id="fe",
+            owner_agent_id="lumen",
             repo_full_name=SEED_REPO,
             metadata={SEED_MARKER_KEY: SEED_MARKER_VALUE},
         )
@@ -64,7 +64,7 @@ async def main() -> None:
             session=session,
             ticket_id=ticket2.id,
             to_status=TicketStatus.IN_PROGRESS,
-            actor="agent:fe",
+            actor="agent:lumen",
         )
 
         ticket3 = await create_ticket(

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor
-from app.auth.permissions import require_owned_ticket
+from app.auth.permissions import require_ticket_read_access
 from app.db import get_session
 from app.domain.actor import Actor
 from app.domain.exceptions import (
@@ -58,9 +58,8 @@ def _serialize_detail(log: RuntimeLog) -> RuntimeLogDetail:
     return RuntimeLogDetail(**summary.model_dump(), content=log.content)
 
 
-def _check_read_access(actor: Actor, ticket: Ticket) -> None:
-    if actor.kind == ActorKind.AGENT:
-        require_owned_ticket(actor, ticket, f"read runtime logs for ticket {ticket.id}")
+async def _check_read_access(session: AsyncSession, actor: Actor, ticket: Ticket) -> None:
+    await require_ticket_read_access(session, actor, ticket, f"read runtime logs for ticket {ticket.id}")
 
 
 @ticket_router.post(
@@ -108,7 +107,7 @@ async def list_runtime_logs_route(
     agent_id: Annotated[str | None, Query()] = None,
 ) -> list[RuntimeLogSummary]:
     ticket = await get_ticket(session, ticket_id)
-    _check_read_access(actor, ticket)
+    await _check_read_access(session, actor, ticket)
     logs = await list_runtime_logs(session, ticket_id=ticket_id, agent_id=agent_id)
     return [_serialize_summary(log) for log in logs]
 
@@ -120,7 +119,7 @@ async def get_ticket_cost_route(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TicketCostRead:
     ticket = await get_ticket(session, ticket_id)
-    _check_read_access(actor, ticket)
+    await _check_read_access(session, actor, ticket)
     logs = await list_runtime_logs(session, ticket_id=ticket_id)
     breakdown = [
         TicketCostBreakdown(
@@ -147,5 +146,5 @@ async def get_runtime_log_route(
 ) -> RuntimeLogDetail:
     log = await get_runtime_log(session, log_id)
     ticket = await get_ticket(session, log.ticket_id)
-    _check_read_access(actor, ticket)
+    await _check_read_access(session, actor, ticket)
     return _serialize_detail(log)

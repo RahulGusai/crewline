@@ -9,7 +9,7 @@ from app.schemas.common import BaseSchema, StrictSchema
 
 RuntimeType = Literal["ticket_work", "question_handling", "review"]
 RuntimeOutcome = Literal["completed", "max_turns_hit", "failed"]
-AgentId = Literal["be", "fe", "architect", "qa"]
+AgentId = Literal["cortex", "lumen", "architect", "sentinel"]
 
 
 class RuntimeLogCreate(StrictSchema):

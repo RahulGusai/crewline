@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor, require_pm_actor
 from app.api.pagination import to_paginated
-from app.auth.permissions import require_owned_ticket
+from app.auth.permissions import require_ticket_read_access
 from app.db import get_session
 from app.domain.actor import Actor
 from app.domain.github import (
@@ -59,7 +59,6 @@ async def create_ticket_route(
         owner_agent_id=payload.owner_agent_id,
         repo_full_name=payload.repo_full_name,
         related_repo_full_names=payload.related_repo_full_names,
-        qa_notes=payload.qa_notes,
         metadata=payload.metadata,
     )
     return TicketRead.model_validate(ticket)
@@ -95,7 +94,7 @@ async def get_ticket_route(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TicketRead:
     ticket = await get_ticket(session, ticket_id)
-    require_owned_ticket(actor, ticket, f"read ticket {ticket_id}")
+    await require_ticket_read_access(session, actor, ticket, f"read ticket {ticket_id}")
     return TicketRead.model_validate(ticket)
 
 
@@ -122,7 +121,6 @@ async def update_ticket_route(
         title=payload.title,
         description=payload.description,
         related_repo_full_names=payload.related_repo_full_names,
-        qa_notes=payload.qa_notes,
         metadata=payload.metadata,
     )
     await session.refresh(ticket)

@@ -67,6 +67,7 @@ async def send_message(
             subject=payload.payload.subject,
             body=payload.payload.body,
             ticket_id=payload.payload.ticket_id,
+            repo_url=payload.payload.repo_url,
         )
     elif isinstance(payload, SendRpcResponse):
         message = await send_rpc_response(

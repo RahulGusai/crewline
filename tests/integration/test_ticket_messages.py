@@ -44,8 +44,8 @@ async def test_pm_lists_all_messages_for_ticket_oldest_first(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
-    rpc = await pm_client.post("/mailbox/messages", json=_rpc_request_payload("agent:be", ticket_id=ticket["id"]))
+    ticket = await create_ticket(owner_agent_id="cortex")
+    rpc = await pm_client.post("/mailbox/messages", json=_rpc_request_payload("agent:cortex", ticket_id=ticket["id"]))
     note = await agent_be_client.post(
         "/mailbox/messages",
         json=_notification_payload(PM_ACTOR, ticket_id=ticket["id"], subject="Update"),
@@ -70,14 +70,14 @@ async def test_agent_owner_lists_only_messages_they_sent_or_received(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     visible = await pm_client.post(
         "/mailbox/messages",
-        json=_notification_payload("agent:be", ticket_id=ticket["id"], subject="Visible"),
+        json=_notification_payload("agent:cortex", ticket_id=ticket["id"], subject="Visible"),
     )
     hidden = await pm_client.post(
         "/mailbox/messages",
-        json=_notification_payload("agent:fe", ticket_id=ticket["id"], subject="Hidden"),
+        json=_notification_payload("agent:lumen", ticket_id=ticket["id"], subject="Hidden"),
     )
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}/messages")
@@ -89,21 +89,31 @@ async def test_agent_owner_lists_only_messages_they_sent_or_received(
     assert visible.json()["id"] in ids
     assert hidden.json()["id"] not in ids
     assert all(
-        message["sender"] == "agent:be" or message["recipient"] == "agent:be"
+        message["sender"] == "agent:cortex" or message["recipient"] == "agent:cortex"
         for message in response.json()
     )
 
 
-async def test_agent_non_owner_gets_actor_not_permitted(
+async def test_agent_non_owner_can_read_ticket_messages(
     create_ticket,
     agent_fe_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_fe_client.get(f"/tickets/{ticket['id']}/messages")
 
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "actor_not_permitted"
+    assert response.status_code == 200, response.text
+
+
+async def test_qa_agent_lists_messages_for_other_agent_ticket(
+    create_ticket,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await agent_qa_client.get(f"/tickets/{ticket['id']}/messages")
+
+    assert response.status_code == 200, response.text
 
 
 async def test_nonexistent_ticket_messages_returns_404(pm_client: httpx.AsyncClient) -> None:
@@ -118,14 +128,14 @@ async def test_ticket_messages_include_acked_and_rejected_messages(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     acked = await pm_client.post(
         "/mailbox/messages",
-        json=_notification_payload("agent:be", ticket_id=ticket["id"], subject="Ack me"),
+        json=_notification_payload("agent:cortex", ticket_id=ticket["id"], subject="Ack me"),
     )
     rejected = await pm_client.post(
         "/mailbox/messages",
-        json=_notification_payload("agent:be", ticket_id=ticket["id"], subject="Reject me"),
+        json=_notification_payload("agent:cortex", ticket_id=ticket["id"], subject="Reject me"),
     )
     ack = await agent_be_client.post(f"/mailbox/messages/{acked.json()['id']}/ack")
     reject = await agent_be_client.post(
@@ -147,10 +157,10 @@ async def test_ticket_messages_exclude_notifications_without_ticket_id(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     ticketless = await pm_client.post(
         "/mailbox/messages",
-        json=_notification_payload("agent:be", ticket_id=None, subject="General"),
+        json=_notification_payload("agent:cortex", ticket_id=None, subject="General"),
     )
 
     response = await pm_client.get(f"/tickets/{ticket['id']}/messages")
@@ -164,7 +174,7 @@ async def test_ticket_messages_requires_auth(
     create_ticket,
     anonymous_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await anonymous_client.get(f"/tickets/{ticket['id']}/messages")
 
@@ -176,7 +186,7 @@ async def test_rpc_response_included_in_ticket_messages(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="rpc pairing", owner_agent_id="be")
+    ticket = await create_ticket(title="rpc pairing", owner_agent_id="cortex")
     request = await agent_be_client.post(
         "/mailbox/messages",
         json=_rpc_request_payload(PM_ACTOR, ticket_id=ticket["id"]),
@@ -185,7 +195,7 @@ async def test_rpc_response_included_in_ticket_messages(
         "/mailbox/messages",
         json={
             "type": "rpc_response",
-            "recipient": "agent:be",
+            "recipient": "agent:cortex",
             "correlation_id": request.json()["id"],
             "payload": {"body": "Answer", "outcome": "answered"},
         },
@@ -209,7 +219,7 @@ async def test_agent_owner_sees_own_correlated_rpc_response(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="agent rpc pairing", owner_agent_id="be")
+    ticket = await create_ticket(title="agent rpc pairing", owner_agent_id="cortex")
     request = await agent_be_client.post(
         "/mailbox/messages",
         json=_rpc_request_payload(PM_ACTOR, ticket_id=ticket["id"]),
@@ -218,7 +228,7 @@ async def test_agent_owner_sees_own_correlated_rpc_response(
         "/mailbox/messages",
         json={
             "type": "rpc_response",
-            "recipient": "agent:be",
+            "recipient": "agent:cortex",
             "correlation_id": request.json()["id"],
             "payload": {"body": "Answer", "outcome": "answered"},
         },
@@ -240,10 +250,10 @@ async def test_agent_filtering_hides_other_correlated_rpc_response(
     agent_be_client: httpx.AsyncClient,
     agent_fe_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(title="hidden rpc pairing", owner_agent_id="be")
+    ticket = await create_ticket(title="hidden rpc pairing", owner_agent_id="cortex")
     request = await pm_client.post(
         "/mailbox/messages",
-        json=_rpc_request_payload("agent:fe", ticket_id=ticket["id"]),
+        json=_rpc_request_payload("agent:lumen", ticket_id=ticket["id"]),
     )
     response_message = await agent_fe_client.post(
         "/mailbox/messages",

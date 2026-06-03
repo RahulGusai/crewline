@@ -8,12 +8,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor
-from app.auth.permissions import require_owned_ticket
+from app.auth.permissions import require_ticket_read_access
 from app.db import get_session
 from app.domain.actor import Actor
 from app.domain.mailbox import list_messages_for_ticket
 from app.domain.tickets import get_ticket
-from app.enums import ActorKind
 from app.schemas.mailbox import MailboxMessageRead
 
 router = APIRouter(prefix="/tickets", tags=["mailbox"])
@@ -27,8 +26,7 @@ async def list_ticket_messages_route(
 ) -> list[MailboxMessageRead]:
     """Return mailbox messages tied to a ticket, ordered oldest-first."""
     ticket = await get_ticket(session, ticket_id)
-    if actor.kind == ActorKind.AGENT:
-        require_owned_ticket(actor, ticket, f"list messages for ticket {ticket_id}")
+    await require_ticket_read_access(session, actor, ticket, f"list messages for ticket {ticket_id}")
 
     messages = await list_messages_for_ticket(
         session,

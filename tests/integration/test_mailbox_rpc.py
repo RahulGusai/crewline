@@ -11,10 +11,11 @@ pytestmark = pytest.mark.integration
 
 
 def _rpc_request_payload(
-    recipient: str = "agent:be",
+    recipient: str = "agent:cortex",
     ticket_id: int | None = 1,
     subject: str | None = "Question",
     body: str | None = "Can you confirm?",
+    repo_url: str | None = None,
 ) -> dict:
     payload: dict[str, object] = {}
     if subject is not None:
@@ -23,6 +24,8 @@ def _rpc_request_payload(
         payload["body"] = body
     if ticket_id is not None:
         payload["ticket_id"] = ticket_id
+    if repo_url is not None:
+        payload["repo_url"] = repo_url
     return {"type": "rpc_request", "recipient": recipient, "payload": payload}
 
 
@@ -69,6 +72,22 @@ async def test_send_rpc_request_recipient_sees_message(
     assert response.json()[0]["id"] == send.json()["id"]
 
 
+async def test_send_rpc_request_preserves_optional_repo_url(
+    pm_client: httpx.AsyncClient,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    send = await pm_client.post(
+        "/mailbox/messages",
+        json=_rpc_request_payload(repo_url="RahulGusai/crewline-test-repo"),
+    )
+
+    response = await agent_be_client.get("/mailbox")
+
+    assert send.status_code == 201, send.text
+    assert send.json()["payload"]["repo_url"] == "RahulGusai/crewline-test-repo"
+    assert response.json()[0]["payload"]["repo_url"] == "RahulGusai/crewline-test-repo"
+
+
 async def test_rpc_response_with_valid_correlation_id(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
@@ -106,7 +125,7 @@ async def test_rpc_response_to_non_rpc_request_returns_422(
         "/mailbox/messages",
         json={
             "type": "notification",
-            "recipient": "agent:be",
+            "recipient": "agent:cortex",
             "payload": {"subject": "FYI", "body": "hello"},
         },
     )
@@ -128,7 +147,7 @@ async def test_rpc_response_recipient_must_be_original_sender(
 
     response = await agent_be_client.post(
         "/mailbox/messages",
-        json=_rpc_response_payload("agent:qa", request.json()["id"]),
+        json=_rpc_response_payload("agent:sentinel", request.json()["id"]),
     )
 
     assert response.status_code == 422
@@ -204,7 +223,7 @@ async def test_pm_sends_rpc_request_to_agent(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    send = await pm_client.post("/mailbox/messages", json=_rpc_request_payload("agent:be"))
+    send = await pm_client.post("/mailbox/messages", json=_rpc_request_payload("agent:cortex"))
     mailbox = await agent_be_client.get("/mailbox")
 
     assert send.status_code == 201, send.text
@@ -217,7 +236,7 @@ async def test_agent_sends_rpc_request_to_another_agent(
 ) -> None:
     send = await agent_be_client.post(
         "/mailbox/messages",
-        json=_rpc_request_payload(recipient="agent:fe"),
+        json=_rpc_request_payload(recipient="agent:lumen"),
     )
     mailbox = await agent_fe_client.get("/mailbox")
 

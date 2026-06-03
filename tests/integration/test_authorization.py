@@ -12,7 +12,7 @@ async def test_agent_reads_own_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}")
 
@@ -23,7 +23,7 @@ async def test_agent_reads_other_ticket_returns_403(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}")
 
@@ -31,12 +31,25 @@ async def test_agent_reads_other_ticket_returns_403(
     assert response.json()["error"]["code"] == "actor_not_permitted"
 
 
+async def test_qa_agent_reads_ticket_owned_by_implementation_agent(
+    create_ticket,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await agent_qa_client.get(f"/tickets/{ticket['id']}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == ticket["id"]
+    assert response.json()["owner_agent_id"] == "cortex"
+
+
 async def test_agent_transitions_own_ticket(
     create_ticket,
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
@@ -48,7 +61,7 @@ async def test_agent_transitions_other_ticket_returns_403(
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
@@ -59,7 +72,7 @@ async def test_agent_adds_artifact_to_own_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/artifacts",
@@ -73,7 +86,7 @@ async def test_agent_adds_artifact_to_other_ticket_returns_403(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await agent_be_client.post(
         f"/tickets/{ticket['id']}/artifacts",
@@ -88,7 +101,7 @@ async def test_pm_accesses_ticket_child_resources(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     artifact = await pm_client.post(
         f"/tickets/{ticket['id']}/artifacts",
         json={"artifact_type": "pm_note", "content": "pm"},
@@ -110,8 +123,8 @@ async def test_agent_list_includes_own_only(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    own = await create_ticket(owner_agent_id="be")
-    other = await create_ticket(owner_agent_id="fe")
+    own = await create_ticket(owner_agent_id="cortex")
+    other = await create_ticket(owner_agent_id="lumen")
 
     response = await agent_be_client.get("/tickets")
 
@@ -125,8 +138,8 @@ async def test_pm_list_filter_sees_all_matching_tickets(
     create_ticket,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    first = await create_ticket(owner_agent_id="be")
-    second = await create_ticket(owner_agent_id="fe")
+    first = await create_ticket(owner_agent_id="cortex")
+    second = await create_ticket(owner_agent_id="lumen")
 
     response = await pm_client.get("/tickets")
 

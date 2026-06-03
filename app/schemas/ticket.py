@@ -16,7 +16,6 @@ class TicketCreate(StrictSchema):
     description: str | None = None
     repo_full_name: str
     related_repo_full_names: list[str] = Field(default_factory=list)
-    qa_notes: str | None = None
     owner_agent_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -25,7 +24,6 @@ class TicketUpdate(StrictSchema):
     title: str | None = None
     description: str | None = None
     related_repo_full_names: list[str] | None = None
-    qa_notes: str | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -52,7 +50,6 @@ class TicketRead(BaseSchema):
     owner_agent_id: str | None
     repo_full_name: str
     related_repo_full_names: list[str]
-    qa_notes: str | None
     pr_url: str | None
     created_by: str
     created_at: datetime

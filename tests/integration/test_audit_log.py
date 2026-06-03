@@ -14,7 +14,7 @@ async def test_creation_writes_one_audit_row(
     create_ticket,
     db_fetch_all,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     rows = await db_fetch_all(
         "SELECT from_status, to_status, actor FROM ticket_audit_log WHERE ticket_id = :ticket_id",
@@ -30,7 +30,7 @@ async def test_transition_writes_audit_row_with_reason_and_actor(
     agent_be_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
     response = await move_ticket(agent_be_client, ticket["id"], "BLOCKED", "dependency missing")
@@ -47,7 +47,7 @@ async def test_transition_writes_audit_row_with_reason_and_actor(
     assert audit == {
         "from_status": "IN_PROGRESS",
         "to_status": "BLOCKED",
-        "actor": "agent:be",
+        "actor": "agent:cortex",
         "reason": "dependency missing",
     }
 
@@ -57,25 +57,25 @@ async def test_reassignment_writes_owner_change_audit_row(
     pm_client: httpx.AsyncClient,
     db_fetch_one,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await pm_client.post(
         f"/tickets/{ticket['id']}/assign",
-        json={"new_owner_agent_id": "fe", "reason": "handoff"},
+        json={"new_owner_agent_id": "lumen", "reason": "handoff"},
     )
     audit = await db_fetch_one(
         """
         SELECT from_owner, to_owner, actor, reason
         FROM ticket_audit_log
-        WHERE ticket_id = :ticket_id AND from_owner = 'be'
+        WHERE ticket_id = :ticket_id AND from_owner = 'cortex'
         """,
         {"ticket_id": ticket["id"]},
     )
 
     assert response.status_code == 200, response.text
     assert audit == {
-        "from_owner": "be",
-        "to_owner": "fe",
+        "from_owner": "cortex",
+        "to_owner": "lumen",
         "actor": PM_ACTOR,
         "reason": "handoff",
     }
@@ -87,7 +87,7 @@ async def test_pm_override_flag_is_recorded(
     pm_client: httpx.AsyncClient,
     db_fetch_all,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await move_ticket(pm_client, ticket["id"], "CANCELLED", "override cancel", True)
     rows = await db_fetch_all(
@@ -106,7 +106,7 @@ async def test_audit_endpoint_returns_rows_in_order(
     pm_client: httpx.AsyncClient,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
     await move_ticket(pm_client, ticket["id"], "CANCELLED", "done", True)
 
@@ -131,20 +131,30 @@ async def test_agent_reads_audit_log_for_own_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="be")
+    ticket = await create_ticket(owner_agent_id="cortex")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}/audit")
 
     assert response.status_code == 200, response.text
 
 
-async def test_agent_reads_audit_log_for_other_ticket_returns_403(
+async def test_qa_agent_reads_audit_log_for_other_agent_ticket(
+    create_ticket,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+
+    response = await agent_qa_client.get(f"/tickets/{ticket['id']}/audit")
+
+    assert response.status_code == 200, response.text
+
+
+async def test_agent_reads_audit_log_for_other_ticket(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await create_ticket(owner_agent_id="fe")
+    ticket = await create_ticket(owner_agent_id="lumen")
 
     response = await agent_be_client.get(f"/tickets/{ticket['id']}/audit")
 
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "actor_not_permitted"
+    assert response.status_code == 200, response.text

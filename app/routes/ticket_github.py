@@ -10,7 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_actor
+from app.auth.permissions import require_agent_ticket_read_access
 from app.db import get_session
+from app.domain.agents import get_agent
 from app.domain.actor import Actor, parse_actor
 from app.domain.exceptions import (
     ActorNotPermittedError,
@@ -28,7 +30,7 @@ from app.domain.github import (
     require_repo_access,
 )
 from app.domain.tickets import get_ticket, parse_github_pr_url, set_ticket_pr_url
-from app.enums import ActorKind, TicketStatus
+from app.enums import ActorKind, AgentRole, TicketStatus
 from app.integrations.github import GitHubMergeError, get_installation_token, merge_pull_request
 from app.models.ticket import Ticket
 from app.models.ticket_audit_log import TicketAuditLog
@@ -52,6 +54,10 @@ async def _require_agent_owner_or_historical_owner(
     if actor.kind != ActorKind.AGENT:
         raise ActorNotPermittedError(actor=actor.raw, action=action)
     if ticket.owner_agent_id == actor.id:
+        return
+
+    agent = await get_agent(session, actor.id)
+    if agent.role == AgentRole.QA.value:
         return
 
     result = await session.execute(
@@ -84,7 +90,7 @@ async def mint_github_token_route(
     payload: GitHubTokenRequest | None = None,
 ) -> GitHubTokenResponse:
     ticket = await get_ticket(session, ticket_id)
-    _require_agent_owner(actor, ticket, f"mint GitHub token for ticket {ticket_id}")
+    await require_agent_ticket_read_access(session, actor, ticket, f"mint GitHub token for ticket {ticket_id}")
     target_repo = payload.repo_full_name if payload and payload.repo_full_name else ticket.repo_full_name
     if target_repo != ticket.repo_full_name and target_repo not in ticket.related_repo_full_names:
         raise RepoNotAccessibleError(target_repo)
