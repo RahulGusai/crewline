@@ -54,18 +54,8 @@ TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule]
         False,
         False,
     ),
-    (TicketStatus.IN_PROGRESS, TicketStatus.READY_FOR_QA): TransitionRule(
+    (TicketStatus.IN_PROGRESS, TicketStatus.IN_QA): TransitionRule(
         AllowedActorCategory.OWNER,
-        False,
-        False,
-    ),
-    (TicketStatus.READY_FOR_QA, TicketStatus.TODO): TransitionRule(
-        AllowedActorCategory.PM,
-        True,
-        True,
-    ),
-    (TicketStatus.READY_FOR_QA, TicketStatus.IN_QA): TransitionRule(
-        AllowedActorCategory.PM,
         False,
         False,
     ),
@@ -95,7 +85,6 @@ CANCELLABLE_FROM: set[TicketStatus] = {
     TicketStatus.TODO,
     TicketStatus.IN_PROGRESS,
     TicketStatus.BLOCKED,
-    TicketStatus.READY_FOR_QA,
     TicketStatus.IN_QA,
     TicketStatus.QA_FAILED,
 }

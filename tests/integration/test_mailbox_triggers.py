@@ -110,7 +110,7 @@ async def test_cancel_unassigned_ticket_fires_no_cancel_message(
     assert row["count"] == 0
 
 
-async def test_ready_for_qa_to_in_qa_fires_review_requested(
+async def test_in_progress_to_in_qa_fires_review_requested(
     create_ticket,
     move_ticket,
     agent_be_client: httpx.AsyncClient,
@@ -119,7 +119,7 @@ async def test_ready_for_qa_to_in_qa_fires_review_requested(
     ticket = await create_ticket(owner_agent_id="cortex")
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
-    response = await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    response = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
     message = await db_fetch_one(
         "SELECT type, recipient, sender, payload FROM mailbox_messages WHERE type = 'ticket_review_requested'",
     )

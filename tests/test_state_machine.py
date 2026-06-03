@@ -40,18 +40,8 @@ def test_transition_rules_match_followup_contract() -> None:
             reason_required=False,
             pm_override_required=False,
         ),
-        (TicketStatus.IN_PROGRESS, TicketStatus.READY_FOR_QA): TransitionRule(
+        (TicketStatus.IN_PROGRESS, TicketStatus.IN_QA): TransitionRule(
             AllowedActorCategory.OWNER,
-            reason_required=False,
-            pm_override_required=False,
-        ),
-        (TicketStatus.READY_FOR_QA, TicketStatus.TODO): TransitionRule(
-            AllowedActorCategory.PM,
-            reason_required=True,
-            pm_override_required=True,
-        ),
-        (TicketStatus.READY_FOR_QA, TicketStatus.IN_QA): TransitionRule(
-            AllowedActorCategory.PM,
             reason_required=False,
             pm_override_required=False,
         ),
@@ -85,7 +75,6 @@ def test_cancellation_rule_matches_followup_contract() -> None:
         TicketStatus.TODO,
         TicketStatus.IN_PROGRESS,
         TicketStatus.BLOCKED,
-        TicketStatus.READY_FOR_QA,
         TicketStatus.IN_QA,
         TicketStatus.QA_FAILED,
     } == CANCELLABLE_FROM

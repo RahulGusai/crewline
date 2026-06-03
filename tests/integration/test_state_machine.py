@@ -8,39 +8,17 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-async def _ready_for_qa(create_ticket, agent_client: httpx.AsyncClient, move_ticket) -> dict:
-    ticket = await create_ticket(title="ready for sentinel", owner_agent_id="cortex")
-    started = await move_ticket(agent_client, ticket["id"], "IN_PROGRESS")
-    ready = await move_ticket(agent_client, ticket["id"], "READY_FOR_QA")
-    assert started.status_code == 200, started.text
-    assert ready.status_code == 200, ready.text
-    return ready.json()
-
-
-async def _force_ready_for_qa(
-    create_ticket,
-    agent_client: httpx.AsyncClient,
-    move_ticket,
-    db_execute,
-) -> dict:
-    ticket = await create_ticket(title="forced ready for sentinel", owner_agent_id="cortex")
-    started = await move_ticket(agent_client, ticket["id"], "IN_PROGRESS")
-    assert started.status_code == 200, started.text
-    await db_execute(
-        "UPDATE tickets SET status = 'READY_FOR_QA' WHERE id = :ticket_id",
-        {"ticket_id": ticket["id"]},
-    )
-    ticket["status"] = "READY_FOR_QA"
-    return ticket
-
-
 async def _in_qa(
     create_ticket,
     agent_be_client: httpx.AsyncClient,
-    pm_client: httpx.AsyncClient,
     move_ticket,
 ) -> dict:
-    return await _ready_for_qa(create_ticket, agent_be_client, move_ticket)
+    ticket = await create_ticket(title="ready for sentinel", owner_agent_id="cortex")
+    started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+    in_qa = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
+    assert started.status_code == 200, started.text
+    assert in_qa.status_code == 200, in_qa.text
+    return in_qa.json()
 
 
 async def test_todo_to_in_progress_by_owner_agent(
@@ -185,7 +163,7 @@ async def test_blocked_to_in_progress_by_owner(
     assert response.json()["status"] == "IN_PROGRESS"
 
 
-async def test_in_progress_to_ready_for_qa_by_owner(
+async def test_in_progress_to_in_qa_by_owner(
     create_ticket,
     move_ticket,
     agent_be_client: httpx.AsyncClient,
@@ -193,14 +171,14 @@ async def test_in_progress_to_ready_for_qa_by_owner(
     ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
 
-    response = await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    response = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
 
     assert started.status_code == 200, started.text
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "IN_QA"
 
 
-async def test_ready_for_qa_auto_transitions_to_in_qa_and_fires_review_message(
+async def test_in_progress_to_in_qa_fires_review_message(
     create_ticket,
     move_ticket,
     agent_be_client: httpx.AsyncClient,
@@ -208,7 +186,7 @@ async def test_ready_for_qa_auto_transitions_to_in_qa_and_fires_review_message(
 ) -> None:
     ticket = await create_ticket(owner_agent_id="cortex")
     started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
-    response = await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    response = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
     messages = await db_fetch_all(
         "SELECT type, recipient, sender FROM mailbox_messages WHERE type = 'ticket_review_requested'",
     )
@@ -223,15 +201,15 @@ async def test_ready_for_qa_auto_transitions_to_in_qa_and_fires_review_message(
     assert messages == [
         {"type": "ticket_review_requested", "recipient": "agent:sentinel", "sender": "system:system"}
     ]
-    assert {"from_status": "READY_FOR_QA", "to_status": "IN_QA", "actor": "system:system"} in audit
+    assert {"from_status": "IN_PROGRESS", "to_status": "IN_QA", "actor": "agent:cortex"} in audit
 
 
-async def test_ready_for_qa_to_in_qa_by_non_pm_returns_403(
+async def test_in_qa_to_in_qa_returns_409(
     create_ticket,
     move_ticket,
     agent_be_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _ready_for_qa(create_ticket, agent_be_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
 
     response = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
 
@@ -246,7 +224,7 @@ async def test_in_qa_to_done_by_qa_agent(
     agent_qa_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
 
     response = await move_ticket(agent_qa_client, ticket["id"], "DONE")
 
@@ -260,7 +238,7 @@ async def test_in_qa_to_done_by_non_qa_agent_returns_403(
     agent_be_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
 
     response = await move_ticket(agent_be_client, ticket["id"], "DONE")
 
@@ -274,7 +252,7 @@ async def test_in_qa_to_qa_failed_by_qa_with_reason(
     agent_qa_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
 
     response = await move_ticket(agent_qa_client, ticket["id"], "QA_FAILED", "needs polish")
 
@@ -289,7 +267,7 @@ async def test_in_qa_to_qa_failed_without_reason_requires_reason(
     agent_qa_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
 
     response = await move_ticket(agent_qa_client, ticket["id"], "QA_FAILED")
 
@@ -304,7 +282,7 @@ async def test_qa_failed_to_todo_by_owner(
     agent_qa_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
     failed = await move_ticket(agent_qa_client, ticket["id"], "QA_FAILED", "needs polish")
 
     response = await move_ticket(agent_be_client, ticket["id"], "TODO")
@@ -312,51 +290,6 @@ async def test_qa_failed_to_todo_by_owner(
     assert failed.status_code == 200, failed.text
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "TODO"
-
-
-async def test_ready_for_qa_to_todo_by_pm_with_override_and_reason(
-    create_ticket,
-    move_ticket,
-    agent_be_client: httpx.AsyncClient,
-    pm_client: httpx.AsyncClient,
-    db_execute,
-) -> None:
-    ticket = await _force_ready_for_qa(create_ticket, agent_be_client, move_ticket, db_execute)
-
-    response = await move_ticket(pm_client, ticket["id"], "TODO", "rework", pm_override=True)
-
-    assert response.status_code == 200, response.text
-    assert response.json()["status"] == "TODO"
-
-
-async def test_ready_for_qa_to_todo_by_pm_without_override_returns_403(
-    create_ticket,
-    move_ticket,
-    agent_be_client: httpx.AsyncClient,
-    pm_client: httpx.AsyncClient,
-    db_execute,
-) -> None:
-    ticket = await _force_ready_for_qa(create_ticket, agent_be_client, move_ticket, db_execute)
-
-    response = await move_ticket(pm_client, ticket["id"], "TODO", "rework")
-
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "override_not_permitted"
-
-
-async def test_ready_for_qa_to_todo_by_pm_override_without_reason_returns_422(
-    create_ticket,
-    move_ticket,
-    agent_be_client: httpx.AsyncClient,
-    pm_client: httpx.AsyncClient,
-    db_execute,
-) -> None:
-    ticket = await _force_ready_for_qa(create_ticket, agent_be_client, move_ticket, db_execute)
-
-    response = await move_ticket(pm_client, ticket["id"], "TODO", pm_override=True)
-
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "reason_required"
 
 
 async def test_any_state_to_cancelled_by_pm_with_override_and_reason(
@@ -404,7 +337,7 @@ async def test_done_is_terminal(
     agent_qa_client: httpx.AsyncClient,
     pm_client: httpx.AsyncClient,
 ) -> None:
-    ticket = await _in_qa(create_ticket, agent_be_client, pm_client, move_ticket)
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
     done = await move_ticket(agent_qa_client, ticket["id"], "DONE")
 
     response = await move_ticket(pm_client, ticket["id"], "TODO", "reopen", True)

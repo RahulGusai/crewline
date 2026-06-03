@@ -7,7 +7,6 @@ class TicketStatus(StrEnum):
     TODO = "TODO"
     IN_PROGRESS = "IN_PROGRESS"
     BLOCKED = "BLOCKED"
-    READY_FOR_QA = "READY_FOR_QA"
     IN_QA = "IN_QA"
     QA_FAILED = "QA_FAILED"
     DONE = "DONE"

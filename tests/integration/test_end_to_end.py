@@ -52,7 +52,7 @@ async def test_flow_a_happy_path_ticket_lifecycle(
         f"/tickets/{ticket_id}/artifacts",
         json={"artifact_type": "implementation", "content": "built"},
     )
-    ready = await _transition(agent_be_client, ticket_id, "READY_FOR_QA")
+    ready = await _transition(agent_be_client, ticket_id, "IN_QA")
     qa_mailbox = await agent_qa_client.get("/mailbox")
     review_id = await _message_id(qa_mailbox, "ticket_review_requested")
     ack_review = await agent_qa_client.post(f"/mailbox/messages/{review_id}/ack")
@@ -71,7 +71,7 @@ async def test_flow_a_happy_path_ticket_lifecycle(
     assert ack_review.status_code == 204, ack_review.text
     assert done.status_code == 200, done.text
     assert done.json()["status"] == "DONE"
-    assert audit["count"] >= 5
+    assert audit["count"] >= 4
 
 
 async def test_flow_b_blocked_rpc_flow(
@@ -137,12 +137,12 @@ async def test_flow_c_qa_failure_and_rework(
     )
     ticket_id = created.json()["id"]
     await _transition(agent_be_client, ticket_id, "IN_PROGRESS")
-    await _transition(agent_be_client, ticket_id, "READY_FOR_QA")
+    await _transition(agent_be_client, ticket_id, "IN_QA")
 
     failed = await _transition(agent_qa_client, ticket_id, "QA_FAILED", "Needs rework")
     back_to_todo = await _transition(agent_be_client, ticket_id, "TODO")
     restarted = await _transition(agent_be_client, ticket_id, "IN_PROGRESS")
-    ready = await _transition(agent_be_client, ticket_id, "READY_FOR_QA")
+    ready = await _transition(agent_be_client, ticket_id, "IN_QA")
     done = await _transition(agent_qa_client, ticket_id, "DONE")
 
     assert failed.status_code == 200, failed.text
@@ -202,7 +202,7 @@ async def test_flow_e_reassignment_to_fe_then_completion(
     unassigned_id = await _message_id(be_mailbox, "ticket_unassigned")
     fe_assigned_id = await _message_id(fe_mailbox, "ticket_assigned")
     started = await _transition(agent_fe_client, ticket_id, "IN_PROGRESS")
-    ready = await _transition(agent_fe_client, ticket_id, "READY_FOR_QA")
+    ready = await _transition(agent_fe_client, ticket_id, "IN_QA")
     done = await _transition(agent_qa_client, ticket_id, "DONE")
     owner_audit = await db_fetch_all(
         """

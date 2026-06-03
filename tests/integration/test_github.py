@@ -324,7 +324,7 @@ async def test_merge_pr_happy_path(
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},
     )
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
-    await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    await move_ticket(agent_be_client, ticket["id"], "IN_QA")
     done = await move_ticket(agent_qa_client, ticket["id"], "DONE")
     respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
         return_value=httpx.Response(
@@ -362,7 +362,7 @@ async def test_qa_agent_can_merge_pr_after_done(
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},
     )
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
-    await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    await move_ticket(agent_be_client, ticket["id"], "IN_QA")
     done = await move_ticket(agent_qa_client, ticket["id"], "DONE")
     respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
         return_value=httpx.Response(
@@ -420,7 +420,7 @@ async def test_merge_pr_maps_github_failures(
         json={"pr_url": f"https://github.com/{DEFAULT_REPO}/pull/42"},
     )
     await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
-    await move_ticket(agent_be_client, ticket["id"], "READY_FOR_QA")
+    await move_ticket(agent_be_client, ticket["id"], "IN_QA")
     await move_ticket(agent_qa_client, ticket["id"], "DONE")
     respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
         return_value=httpx.Response(

@@ -196,20 +196,7 @@ async def transition_ticket(
     session.add(audit)
     await session.flush()
 
-    if from_status == TicketStatus.IN_PROGRESS and to_status == TicketStatus.READY_FOR_QA:
-        ticket.status = TicketStatus.IN_QA.value
-        auto_audit = TicketAuditLog(
-            ticket_id=ticket.id,
-            from_status=TicketStatus.READY_FOR_QA.value,
-            to_status=TicketStatus.IN_QA.value,
-            from_owner=None,
-            to_owner=None,
-            actor=AUTO_QA_ACTOR,
-            reason=None,
-            pm_override=False,
-        )
-        session.add(auto_audit)
-        await session.flush()
+    if from_status == TicketStatus.IN_PROGRESS and to_status == TicketStatus.IN_QA:
         await send_ticket_review_requested(
             session,
             ticket_id=ticket.id,
@@ -224,14 +211,6 @@ async def transition_ticket(
             recipient=f"agent:{ticket.owner_agent_id}",
             sender=actor,
             reason=reason,
-        )
-
-    if from_status == TicketStatus.READY_FOR_QA and to_status == TicketStatus.IN_QA:
-        await send_ticket_review_requested(
-            session,
-            ticket_id=ticket.id,
-            recipient="agent:sentinel",
-            sender=actor,
         )
 
     logger.info(
