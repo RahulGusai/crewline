@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterator
 from typing import Any, cast
 
 import structlog
@@ -76,6 +77,21 @@ def get_object_size(s3_key: str) -> int | None:
         return int(response["ContentLength"])
     except (BotoCoreError, ClientError):
         return None
+
+
+def get_object_stream(s3_key: str) -> tuple[Iterator[bytes], int | None]:
+    client = get_storage_client()
+    response = cast(dict[str, Any], client.get_object(Bucket=get_bucket_name(), Key=s3_key))
+    body = response["Body"]
+    content_length = response.get("ContentLength")
+
+    def chunks() -> Iterator[bytes]:
+        try:
+            yield from body.iter_chunks(chunk_size=1024 * 1024)
+        finally:
+            body.close()
+
+    return chunks(), int(content_length) if content_length is not None else None
 
 
 def verify_object_exists(s3_key: str) -> bool:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +37,7 @@ from app.schemas.ticket import (
 )
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+logger = structlog.get_logger(__name__)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=TicketRead)
@@ -44,6 +46,11 @@ async def create_ticket_route(
     actor: Annotated[Actor, Depends(require_pm_actor)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TicketRead:
+    logger.debug(
+        "tickets.create.payload",
+        actor=actor.raw,
+        payload=payload.model_dump(mode="json"),
+    )
     installation = await require_active_installation(session, pm_uuid_from_actor_id(actor.id))
     await validate_ticket_repos(
         session,
@@ -57,6 +64,7 @@ async def create_ticket_route(
         description=payload.description,
         created_by=actor.raw,
         owner_agent_id=payload.owner_agent_id,
+        ticket_kind=payload.ticket_kind,
         repo_full_name=payload.repo_full_name,
         related_repo_full_names=payload.related_repo_full_names,
         metadata=payload.metadata,

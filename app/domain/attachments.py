@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import structlog
@@ -13,6 +14,7 @@ from app.domain.exceptions import (
     AttachmentContentTypeNotAllowedError,
     AttachmentNotFoundError,
     AttachmentNotReadyError,
+    AttachmentStorageUnavailableError,
     AttachmentTooLargeError,
     AttachmentUploadVerificationFailedError,
 )
@@ -25,6 +27,7 @@ from app.storage.operations import (
     generate_presigned_put_url,
     generate_s3_key,
     get_object_size,
+    get_object_stream,
 )
 from app.storage.policy import is_content_type_allowed
 
@@ -154,6 +157,34 @@ async def request_download_url(
 
     download_url = generate_presigned_get_url(attachment.s3_key, attachment.filename)
     return attachment, download_url
+
+
+async def open_attachment_content(
+    session: AsyncSession,
+    *,
+    ticket_id: int,
+    attachment_id: int,
+) -> tuple[TicketAttachment, Iterator[bytes], int | None]:
+    attachment = await session.get(TicketAttachment, attachment_id)
+    if attachment is None:
+        raise AttachmentNotFoundError(attachment_id)
+    if attachment.ticket_id != ticket_id:
+        raise AttachmentNotFoundError(attachment_id)
+    if attachment.status != AttachmentStatus.READY.value:
+        raise AttachmentNotReadyError(attachment_id, attachment.status)
+
+    try:
+        stream, content_length = get_object_stream(attachment.s3_key)
+    except Exception as exc:
+        logger.warning(
+            "attachment.storage_read_failed",
+            attachment_id=attachment_id,
+            ticket_id=attachment.ticket_id,
+            s3_key=attachment.s3_key,
+            error=str(exc),
+        )
+        raise AttachmentStorageUnavailableError(attachment_id, str(exc)) from exc
+    return attachment, stream, content_length
 
 
 async def soft_delete_attachment(

@@ -25,7 +25,7 @@ from app.domain.mailbox import (
     send_ticket_unassigned,
 )
 from app.domain.state_machine import validate_transition
-from app.enums import ActorKind, TicketStatus
+from app.enums import ActorKind, TicketKind, TicketStatus
 from app.models.ticket import Ticket
 from app.models.ticket_audit_log import TicketAuditLog
 
@@ -56,6 +56,7 @@ async def create_ticket(
     description: str | None,
     created_by: str,
     owner_agent_id: str | None = None,
+    ticket_kind: TicketKind = TicketKind.STANDARD,
     repo_full_name: str,
     related_repo_full_names: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
@@ -76,6 +77,7 @@ async def create_ticket(
         title=title,
         description=description,
         status=TicketStatus.TODO.value,
+        ticket_kind=ticket_kind.value,
         owner_agent_id=owner.id if owner is not None else None,
         created_by=created_by,
         repo_full_name=repo_full_name,
@@ -196,7 +198,11 @@ async def transition_ticket(
     session.add(audit)
     await session.flush()
 
-    if from_status == TicketStatus.IN_PROGRESS and to_status == TicketStatus.IN_QA:
+    if (
+        TicketKind(ticket.ticket_kind) == TicketKind.STANDARD
+        and from_status == TicketStatus.IN_PROGRESS
+        and to_status == TicketStatus.IN_QA
+    ):
         await send_ticket_review_requested(
             session,
             ticket_id=ticket.id,

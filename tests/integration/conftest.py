@@ -320,12 +320,18 @@ async def create_ticket(pm_client: httpx.AsyncClient) -> Callable[..., Any]:
         owner_agent_id: str | None = "cortex",
         repo_full_name: str = DEFAULT_REPO,
         related_repo_full_names: list[str] | None = None,
+        ticket_kind: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"title": title, "repo_full_name": repo_full_name}
         if owner_agent_id is not None:
             payload["owner_agent_id"] = owner_agent_id
         if related_repo_full_names is not None:
             payload["related_repo_full_names"] = related_repo_full_names
+        if ticket_kind is not None:
+            payload["ticket_kind"] = ticket_kind
+        if metadata is not None:
+            payload["metadata"] = metadata
         response = await pm_client.post("/tickets", json=payload)
         assert response.status_code == 201, response.text
         return response.json()

@@ -6,6 +6,7 @@ from app.domain.state_machine import (
     CANCELLABLE_FROM,
     CANCELLATION_RULE,
     TERMINAL_STATES,
+    TEST_ONLY_TRANSITION_RULES,
     TRANSITION_RULES,
     AllowedActorCategory,
     TransitionRule,
@@ -63,6 +64,43 @@ def test_transition_rules_match_followup_contract() -> None:
     }
 
     assert expected == TRANSITION_RULES
+
+
+def test_test_only_transition_rules_match_contract() -> None:
+    expected = {
+        (None, TicketStatus.TODO): TransitionRule(
+            AllowedActorCategory.PM,
+            reason_required=False,
+            pm_override_required=False,
+        ),
+        (TicketStatus.TODO, TicketStatus.IN_PROGRESS): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=False,
+            pm_override_required=False,
+        ),
+        (TicketStatus.TODO, TicketStatus.BLOCKED): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=True,
+            pm_override_required=False,
+        ),
+        (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=True,
+            pm_override_required=False,
+        ),
+        (TicketStatus.BLOCKED, TicketStatus.IN_PROGRESS): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=False,
+            pm_override_required=False,
+        ),
+        (TicketStatus.IN_PROGRESS, TicketStatus.DONE): TransitionRule(
+            AllowedActorCategory.OWNER,
+            reason_required=False,
+            pm_override_required=False,
+        ),
+    }
+
+    assert expected == TEST_ONLY_TRANSITION_RULES
 
 
 def test_cancellation_rule_matches_followup_contract() -> None:

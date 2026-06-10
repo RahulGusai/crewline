@@ -22,10 +22,11 @@ async def test_pm_creates_ticket_with_owner(
     assert response.status_code == 201, response.text
     ticket = response.json()
     assert ticket["status"] == "TODO"
+    assert ticket["ticket_kind"] == "STANDARD"
     assert ticket["owner_agent_id"] == "cortex"
 
     row = await db_fetch_one(
-        "SELECT status, owner_agent_id, repo_full_name FROM tickets WHERE id = :ticket_id",
+        "SELECT status, ticket_kind, owner_agent_id, repo_full_name FROM tickets WHERE id = :ticket_id",
         {"ticket_id": ticket["id"]},
     )
     audit = await db_fetch_one(
@@ -39,6 +40,7 @@ async def test_pm_creates_ticket_with_owner(
 
     assert row == {
         "status": "TODO",
+        "ticket_kind": "STANDARD",
         "owner_agent_id": "cortex",
         "repo_full_name": DEFAULT_REPO,
     }
@@ -62,6 +64,120 @@ async def test_pm_creates_ticket_without_owner(
     assert ticket["status"] == "TODO"
     assert ticket["owner_agent_id"] is None
     assert mailbox["count"] == 0
+
+
+async def test_pm_creates_test_only_ticket(
+    pm_client: httpx.AsyncClient,
+    db_fetch_one,
+) -> None:
+    response = await pm_client.post(
+        "/tickets",
+        json={
+            "title": "test coverage",
+            "owner_agent_id": "cortex",
+            "repo_full_name": DEFAULT_REPO,
+            "ticket_kind": "TEST_ONLY",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    ticket = response.json()
+    row = await db_fetch_one(
+        "SELECT ticket_kind FROM tickets WHERE id = :ticket_id",
+        {"ticket_id": ticket["id"]},
+    )
+
+    assert ticket["ticket_kind"] == "TEST_ONLY"
+    assert row == {"ticket_kind": "TEST_ONLY"}
+
+
+async def test_pm_creates_ticket_with_test_sidecars(
+    pm_client: httpx.AsyncClient,
+    db_fetch_one,
+) -> None:
+    response = await pm_client.post(
+        "/tickets",
+        json={
+            "title": "needs infra",
+            "owner_agent_id": "cortex",
+            "repo_full_name": DEFAULT_REPO,
+            "metadata": {"test_sidecars": ["postgres", "redis"], "note": "free-form ok"},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    ticket = response.json()
+    row = await db_fetch_one(
+        "SELECT metadata FROM tickets WHERE id = :ticket_id",
+        {"ticket_id": ticket["id"]},
+    )
+
+    assert ticket["metadata"]["test_sidecars"] == ["postgres", "redis"]
+    assert ticket["metadata"]["note"] == "free-form ok"
+    assert row["metadata"]["test_sidecars"] == ["postgres", "redis"]
+
+
+async def test_create_ticket_with_unknown_sidecar_returns_422(pm_client: httpx.AsyncClient) -> None:
+    response = await pm_client.post(
+        "/tickets",
+        json={
+            "title": "bad sidecar",
+            "repo_full_name": DEFAULT_REPO,
+            "metadata": {"test_sidecars": ["mysql"]},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+async def test_create_ticket_with_non_list_sidecars_returns_422(pm_client: httpx.AsyncClient) -> None:
+    response = await pm_client.post(
+        "/tickets",
+        json={
+            "title": "bad sidecar shape",
+            "repo_full_name": DEFAULT_REPO,
+            "metadata": {"test_sidecars": "postgres"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+async def test_create_ticket_deduplicates_sidecars(pm_client: httpx.AsyncClient) -> None:
+    response = await pm_client.post(
+        "/tickets",
+        json={
+            "title": "dupes",
+            "repo_full_name": DEFAULT_REPO,
+            "metadata": {"test_sidecars": ["postgres", "postgres", "redis"]},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["metadata"]["test_sidecars"] == ["postgres", "redis"]
+
+
+async def test_pm_updates_metadata_sidecars(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(title="update sidecars", metadata={"test_sidecars": ["postgres"]})
+
+    valid = await pm_client.patch(
+        f"/tickets/{ticket['id']}",
+        json={"metadata": {"test_sidecars": ["redis"]}},
+    )
+    invalid = await pm_client.patch(
+        f"/tickets/{ticket['id']}",
+        json={"metadata": {"test_sidecars": ["mysql"]}},
+    )
+
+    assert valid.status_code == 200, valid.text
+    assert valid.json()["metadata"]["test_sidecars"] == ["redis"]
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "validation_error"
 
 
 async def test_pm_creates_with_invalid_agent_id(pm_client: httpx.AsyncClient) -> None:

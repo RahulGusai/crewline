@@ -178,6 +178,67 @@ async def test_in_progress_to_in_qa_by_owner(
     assert response.json()["status"] == "IN_QA"
 
 
+async def test_test_only_in_progress_to_done_by_owner(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex", ticket_kind="TEST_ONLY")
+    started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+
+    response = await move_ticket(agent_be_client, ticket["id"], "DONE")
+
+    assert started.status_code == 200, started.text
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "DONE"
+
+
+async def test_test_only_in_progress_to_done_by_non_owner_returns_403(
+    create_ticket,
+    move_ticket,
+    agent_fe_client: httpx.AsyncClient,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex", ticket_kind="TEST_ONLY")
+    started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+
+    response = await move_ticket(agent_fe_client, ticket["id"], "DONE")
+
+    assert started.status_code == 200, started.text
+    assert response.status_code == 403
+
+
+async def test_test_only_in_progress_to_in_qa_returns_409(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex", ticket_kind="TEST_ONLY")
+    started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+
+    response = await move_ticket(agent_be_client, ticket["id"], "IN_QA")
+
+    assert started.status_code == 200, started.text
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "invalid_transition"
+
+
+async def test_test_only_qa_failed_path_returns_409(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex", ticket_kind="TEST_ONLY")
+    started = await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+
+    response = await move_ticket(agent_qa_client, ticket["id"], "QA_FAILED", "needs work")
+
+    assert started.status_code == 200, started.text
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "invalid_transition"
+
+
 async def test_in_progress_to_in_qa_fires_review_message(
     create_ticket,
     move_ticket,
