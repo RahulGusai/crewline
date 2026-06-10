@@ -14,7 +14,7 @@ from app.domain.exceptions import (
     OverrideNotPermittedError,
     ReasonRequiredError,
 )
-from app.enums import ActorKind, TicketStatus
+from app.enums import ActorKind, TicketKind, TicketStatus
 from app.models.agent import Agent
 from app.models.ticket import Ticket
 
@@ -76,6 +76,35 @@ TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule]
     ),
 }
 
+TEST_ONLY_TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule] = {
+    (None, TicketStatus.TODO): TransitionRule(AllowedActorCategory.PM, False, False),
+    (TicketStatus.TODO, TicketStatus.IN_PROGRESS): TransitionRule(
+        AllowedActorCategory.OWNER,
+        False,
+        False,
+    ),
+    (TicketStatus.TODO, TicketStatus.BLOCKED): TransitionRule(
+        AllowedActorCategory.OWNER,
+        True,
+        False,
+    ),
+    (TicketStatus.IN_PROGRESS, TicketStatus.BLOCKED): TransitionRule(
+        AllowedActorCategory.OWNER,
+        True,
+        False,
+    ),
+    (TicketStatus.BLOCKED, TicketStatus.IN_PROGRESS): TransitionRule(
+        AllowedActorCategory.OWNER,
+        False,
+        False,
+    ),
+    (TicketStatus.IN_PROGRESS, TicketStatus.DONE): TransitionRule(
+        AllowedActorCategory.OWNER,
+        False,
+        False,
+    ),
+}
+
 CANCELLATION_RULE = TransitionRule(
     allowed_actor=AllowedActorCategory.PM,
     reason_required=True,
@@ -106,6 +135,7 @@ async def validate_transition(
 ) -> None:
     """Validate a status transition and raise a domain error if invalid."""
     from_status = TicketStatus(ticket.status) if ticket is not None else None
+    ticket_kind = TicketKind(ticket.ticket_kind) if ticket is not None else TicketKind.STANDARD
 
     if from_status in TERMINAL_STATES:
         raise InvalidTransitionError(
@@ -121,7 +151,8 @@ async def validate_transition(
             )
         rule = CANCELLATION_RULE
     else:
-        transition_rule = TRANSITION_RULES.get((from_status, to_status))
+        rules = TEST_ONLY_TRANSITION_RULES if ticket_kind == TicketKind.TEST_ONLY else TRANSITION_RULES
+        transition_rule = rules.get((from_status, to_status))
         if transition_rule is None:
             raise InvalidTransitionError(
                 from_status=from_status.value if from_status is not None else None,

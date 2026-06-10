@@ -7,6 +7,7 @@ from sqlalchemy import BigInteger, DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.enums import TicketKind
 from app.models.base import Base
 
 
@@ -17,6 +18,12 @@ class Ticket(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
+    ticket_kind: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=TicketKind.STANDARD.value,
+        server_default=TicketKind.STANDARD.value,
+    )
     owner_agent_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_by: Mapped[str] = mapped_column(String, nullable=False)
     repo_full_name: Mapped[str] = mapped_column(Text, nullable=False)

@@ -239,6 +239,18 @@ class AttachmentUploadVerificationFailedError(DomainError):
         return {"attachment_id": self.attachment_id, "reason": self.reason}
 
 
+class AttachmentStorageUnavailableError(DomainError):
+    code = "attachment_storage_unavailable"
+
+    def __init__(self, attachment_id: int, reason: str) -> None:
+        self.attachment_id = attachment_id
+        self.reason = reason
+        super().__init__(f"Attachment {attachment_id} could not be read from storage: {reason}")
+
+    def to_details(self) -> dict[str, Any]:
+        return {"attachment_id": self.attachment_id, "reason": self.reason}
+
+
 class GitHubNotConnectedError(DomainError):
     code = "github_not_connected"
 

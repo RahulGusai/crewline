@@ -13,6 +13,16 @@ class TicketStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class TicketKind(StrEnum):
+    STANDARD = "STANDARD"
+    TEST_ONLY = "TEST_ONLY"
+
+
+class TestSidecar(StrEnum):
+    POSTGRES = "postgres"
+    REDIS = "redis"
+
+
 class AgentRole(StrEnum):
     BE = "be"
     FE = "fe"

@@ -132,6 +132,25 @@ async def test_in_progress_to_in_qa_fires_review_requested(
     assert message["payload"]["requested_by"] == "system:system"
 
 
+async def test_test_only_done_fires_no_review_requested(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+    db_fetch_one,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex", ticket_kind="TEST_ONLY")
+    await move_ticket(agent_be_client, ticket["id"], "IN_PROGRESS")
+
+    response = await move_ticket(agent_be_client, ticket["id"], "DONE")
+    row = await db_fetch_one(
+        "SELECT count(*) AS count FROM mailbox_messages WHERE type = 'ticket_review_requested'",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "DONE"
+    assert row["count"] == 0
+
+
 async def test_other_transitions_fire_no_mailbox_messages(
     create_ticket,
     move_ticket,

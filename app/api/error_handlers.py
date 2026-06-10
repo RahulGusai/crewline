@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from typing import cast
 
+import structlog
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 
 from app.domain.exceptions import DomainError
+
+logger = structlog.get_logger(__name__)
 
 STATUS_BY_CODE: dict[str, int] = {
     "ticket_not_found": status.HTTP_404_NOT_FOUND,
@@ -31,6 +35,7 @@ STATUS_BY_CODE: dict[str, int] = {
     "attachment_content_type_not_allowed": status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
     "attachment_not_ready": status.HTTP_409_CONFLICT,
     "attachment_upload_verification_failed": status.HTTP_409_CONFLICT,
+    "attachment_storage_unavailable": status.HTTP_502_BAD_GATEWAY,
     "github_not_connected": status.HTTP_400_BAD_REQUEST,
     "github_installation_inactive": status.HTTP_400_BAD_REQUEST,
     "repo_not_accessible": status.HTTP_400_BAD_REQUEST,
@@ -72,13 +77,21 @@ async def handle_validation_error(
     exc: RequestValidationError,
 ) -> JSONResponse:
     """Return validation errors using the API error envelope."""
+    logger.debug(
+        "request.validation_error",
+        method=request.method,
+        path=request.url.path,
+        payload=exc.body,
+        errors=exc.errors(),
+    )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": {
                 "code": "validation_error",
                 "message": "Request validation failed",
-                "details": {"errors": exc.errors()},
+                # value_error entries carry the raw exception in ctx; encode for JSON
+                "details": {"errors": jsonable_encoder(exc.errors())},
             }
         },
     )

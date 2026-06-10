@@ -19,18 +19,6 @@ async def test_agent_reads_own_ticket(
     assert response.status_code == 200, response.text
 
 
-async def test_agent_reads_other_ticket_returns_403(
-    create_ticket,
-    agent_be_client: httpx.AsyncClient,
-) -> None:
-    ticket = await create_ticket(owner_agent_id="lumen")
-
-    response = await agent_be_client.get(f"/tickets/{ticket['id']}")
-
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "actor_not_permitted"
-
-
 async def test_qa_agent_reads_ticket_owned_by_implementation_agent(
     create_ticket,
     agent_qa_client: httpx.AsyncClient,

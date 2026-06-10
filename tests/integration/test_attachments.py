@@ -347,6 +347,128 @@ async def test_download_url_fetches_uploaded_bytes(
     assert response.content == b"hello"
 
 
+async def test_content_endpoint_streams_uploaded_bytes(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], filename="schema.md", content_type="text/markdown", size_bytes=7)
+    await _put_bytes(upload.json()["upload_url"], b"# spec\n", content_type="text/markdown")
+    await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/finalize",
+    )
+
+    response = await pm_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.content == b"# spec\n"
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert response.headers["content-length"] == "7"
+    assert "schema.md" in response.headers["content-disposition"]
+
+
+async def test_qa_agent_fetches_attachment_content_for_other_agent_ticket(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+    agent_qa_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], filename="review.md", content_type="text/markdown", size_bytes=6)
+    await _put_bytes(upload.json()["upload_url"], b"review", content_type="text/markdown")
+    await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/finalize",
+    )
+
+    response = await agent_qa_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.content == b"review"
+
+
+async def test_content_endpoint_for_pending_attachment_returns_409(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
+
+    response = await pm_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "attachment_not_ready"
+
+
+async def test_content_endpoint_for_deleted_attachment_returns_409(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
+    await _put_bytes(upload.json()["upload_url"], b"hello")
+    await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/finalize",
+    )
+    await pm_client.delete(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}",
+    )
+
+    response = await pm_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "attachment_not_ready"
+
+
+async def test_content_endpoint_cross_ticket_attachment_id_returns_404(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    first = await create_ticket(title="first", owner_agent_id="cortex")
+    second = await create_ticket(title="second", owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, first["id"], size_bytes=5)
+
+    response = await pm_client.get(
+        f"/tickets/{second['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "attachment_not_found"
+
+
+async def test_content_endpoint_storage_failure_returns_502(
+    create_ticket,
+    pm_client: httpx.AsyncClient,
+    storage_client: Any,
+    storage_bucket: str,
+    db_fetch_one,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    upload = await _request_upload(pm_client, ticket["id"], size_bytes=5)
+    await _put_bytes(upload.json()["upload_url"], b"hello")
+    await pm_client.post(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/finalize",
+    )
+    attachment = await db_fetch_one(
+        "SELECT s3_key FROM ticket_attachments WHERE id = :attachment_id",
+        {"attachment_id": upload.json()["attachment_id"]},
+    )
+    storage_client.delete_object(Bucket=storage_bucket, Key=attachment["s3_key"])
+
+    response = await pm_client.get(
+        f"/tickets/{ticket['id']}/attachments/{upload.json()['attachment_id']}/content",
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "attachment_storage_unavailable"
+
+
 async def test_download_url_for_pending_attachment_returns_409(
     create_ticket,
     pm_client: httpx.AsyncClient,
