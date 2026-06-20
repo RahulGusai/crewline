@@ -176,6 +176,25 @@ async def test_qa_agent_mints_repo_scoped_github_token_for_review(
 
 
 @respx.mock
+async def test_github_token_timeout_returns_error_envelope(
+    create_ticket,
+    agent_be_client: httpx.AsyncClient,
+) -> None:
+    ticket = await create_ticket(owner_agent_id="cortex")
+    respx.post(f"{GITHUB_API}/app/installations/98765/access_tokens").mock(
+        side_effect=httpx.ConnectTimeout("connect timeout"),
+    )
+
+    response = await agent_be_client.post(f"/tickets/{ticket['id']}/github-token")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "github_token_mint_failed"
+    assert response.json()["error"]["details"] == {
+        "reason": "GitHub request failed: ConnectTimeout",
+    }
+
+
+@respx.mock
 async def test_agent_mints_related_repo_token(
     create_ticket,
     agent_be_client: httpx.AsyncClient,

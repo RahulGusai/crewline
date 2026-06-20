@@ -21,6 +21,7 @@ class TicketKind(StrEnum):
 class TestSidecar(StrEnum):
     POSTGRES = "postgres"
     REDIS = "redis"
+    MINIO = "minio"
 
 
 class AgentRole(StrEnum):

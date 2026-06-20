@@ -47,9 +47,10 @@ def test_transition_rules_match_followup_contract() -> None:
             pm_override_required=False,
         ),
         (TicketStatus.IN_QA, TicketStatus.DONE): TransitionRule(
-            AllowedActorCategory.ROLE_QA,
+            AllowedActorCategory.ROLE_QA_OR_PM,
             reason_required=False,
             pm_override_required=False,
+            pm_reason_required=True,
         ),
         (TicketStatus.IN_QA, TicketStatus.QA_FAILED): TransitionRule(
             AllowedActorCategory.ROLE_QA,

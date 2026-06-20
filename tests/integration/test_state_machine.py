@@ -306,6 +306,34 @@ async def test_in_qa_to_done_by_non_qa_agent_returns_403(
     assert response.status_code == 403
 
 
+async def test_in_qa_to_done_by_pm_with_reason(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
+
+    response = await move_ticket(pm_client, ticket["id"], "DONE", "shipping as-is")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "DONE"
+
+
+async def test_in_qa_to_done_by_pm_without_reason_requires_reason(
+    create_ticket,
+    move_ticket,
+    agent_be_client: httpx.AsyncClient,
+    pm_client: httpx.AsyncClient,
+) -> None:
+    ticket = await _in_qa(create_ticket, agent_be_client, move_ticket)
+
+    response = await move_ticket(pm_client, ticket["id"], "DONE")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "reason_required"
+
+
 async def test_in_qa_to_qa_failed_by_qa_with_reason(
     create_ticket,
     move_ticket,
