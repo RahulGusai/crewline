@@ -23,6 +23,7 @@ class AllowedActorCategory(StrEnum):
     OWNER = "owner"
     PM = "pm"
     ROLE_QA = "role:qa"
+    ROLE_QA_OR_PM = "role:qa|pm"
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class TransitionRule:
     allowed_actor: AllowedActorCategory
     reason_required: bool
     pm_override_required: bool
+    pm_reason_required: bool = False
 
 
 TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule] = {
@@ -60,9 +62,10 @@ TRANSITION_RULES: dict[tuple[TicketStatus | None, TicketStatus], TransitionRule]
         False,
     ),
     (TicketStatus.IN_QA, TicketStatus.DONE): TransitionRule(
-        AllowedActorCategory.ROLE_QA,
+        AllowedActorCategory.ROLE_QA_OR_PM,
         False,
         False,
+        pm_reason_required=True,
     ),
     (TicketStatus.IN_QA, TicketStatus.QA_FAILED): TransitionRule(
         AllowedActorCategory.ROLE_QA,
@@ -177,6 +180,10 @@ async def validate_transition(
         from_label = from_status.value if from_status is not None else "creation"
         raise ReasonRequiredError(transition=f"{from_label} -> {to_status.value}")
 
+    if rule.pm_reason_required and actor.kind == ActorKind.HUMAN and not _is_reason_provided(reason):
+        from_label = from_status.value if from_status is not None else "creation"
+        raise ReasonRequiredError(transition=f"{from_label} -> {to_status.value}")
+
 
 async def _actor_matches_category(
     session: AsyncSession,
@@ -193,6 +200,14 @@ async def _actor_matches_category(
         return ticket.owner_agent_id == actor.id
 
     if category == AllowedActorCategory.ROLE_QA:
+        if actor.kind != ActorKind.AGENT:
+            return False
+        agent = await session.get(Agent, actor.id)
+        return agent is not None and agent.role == "qa"
+
+    if category == AllowedActorCategory.ROLE_QA_OR_PM:
+        if actor.kind == ActorKind.HUMAN:
+            return True
         if actor.kind != ActorKind.AGENT:
             return False
         agent = await session.get(Agent, actor.id)

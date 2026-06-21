@@ -60,15 +60,18 @@ async def get_installation_token(
     if repository_ids:
         body["repository_ids"] = repository_ids
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
-            headers={
-                "Authorization": f"Bearer {jwt_token}",
-                "Accept": "application/vnd.github+json",
-            },
-            json=body,
-        )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
+                headers={
+                    "Authorization": f"Bearer {jwt_token}",
+                    "Accept": "application/vnd.github+json",
+                },
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        raise GitHubTokenMintFailedError(f"GitHub request failed: {exc.__class__.__name__}") from exc
     if response.status_code != 201:
         raise GitHubTokenMintFailedError(f"GitHub returned {response.status_code}")
     return dict(response.json())

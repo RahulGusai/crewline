@@ -101,7 +101,7 @@ async def test_pm_creates_ticket_with_test_sidecars(
             "title": "needs infra",
             "owner_agent_id": "cortex",
             "repo_full_name": DEFAULT_REPO,
-            "metadata": {"test_sidecars": ["postgres", "redis"], "note": "free-form ok"},
+            "metadata": {"test_sidecars": ["postgres", "redis", "minio"], "note": "free-form ok"},
         },
     )
 
@@ -112,9 +112,9 @@ async def test_pm_creates_ticket_with_test_sidecars(
         {"ticket_id": ticket["id"]},
     )
 
-    assert ticket["metadata"]["test_sidecars"] == ["postgres", "redis"]
+    assert ticket["metadata"]["test_sidecars"] == ["postgres", "redis", "minio"]
     assert ticket["metadata"]["note"] == "free-form ok"
-    assert row["metadata"]["test_sidecars"] == ["postgres", "redis"]
+    assert row["metadata"]["test_sidecars"] == ["postgres", "redis", "minio"]
 
 
 async def test_create_ticket_with_unknown_sidecar_returns_422(pm_client: httpx.AsyncClient) -> None:
